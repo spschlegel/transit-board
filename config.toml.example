@@ -1,0 +1,31 @@
+# Transit Board Configuration
+# Copy to config.toml and fill in your values.
+# MBTA API key goes in .env as MBTA_API_KEY (never commit config.toml or .env)
+#
+# Find stop IDs at: https://api-v3.mbta.com/stops
+# Find your coordinates at: https://www.latlong.net/
+
+[location]
+lat = 42.3601   # Boston, MA
+lon = -71.0589
+
+# Up to 2 stops are displayed (one in each half of the left panel).
+# type: "bus" or "subway"
+
+[[stops]]
+id = "64"              # Example: Ruggles bus stop
+name = "Bus"
+type = "bus"
+
+[[stops]]
+id = "place-rugg"      # Example: Ruggles Orange Line
+name = "Orange"
+type = "subway"
+
+[display]
+brightness = 50          # 0–100 — panel LED brightness
+departures_per_stop = 3  # departure rows shown per stop
+
+[refresh]
+transit_secs = 30        # how often to re-fetch MBTA predictions
+weather_secs = 300       # how often to re-fetch weather (Open-Meteo)

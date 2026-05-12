@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+.env
+config.toml
+rpi-rgb-led-matrix/
+/tmp/transit_board_frame.png
+.DS_Store
+*.log

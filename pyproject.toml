@@ -1,0 +1,32 @@
+[project]
+name = "transit-board"
+version = "0.1.0"
+description = "RGB LED matrix transit departure board for Raspberry Pi"
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.27",
+    "pillow>=10.0",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.4",
+    "pygame>=2.5",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/transit_board"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["transit_board"]
