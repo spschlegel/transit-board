@@ -68,7 +68,7 @@ cp .env.example .env             # add MBTA_API_KEY
 make run
 ```
 
-> **Python 3.13 note**: `make install` auto-patches `rpi-rgb-led-matrix/bindings/python/setup.py` swapping `distutils` → `setuptools` (distutils removed in 3.12+).
+> **Python 3.13 note**: `make install` auto-patches `rpi-rgb-led-matrix/bindings/python/setup.py` swapping `distutils` → `setuptools` (distutils removed in 3.12+). Patch uses `sudo sed` — run `make install` as **normal user**, not root (root lacks `uv` in PATH).
 
 ## Repo structure (implemented)
 
