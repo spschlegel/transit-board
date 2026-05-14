@@ -54,17 +54,17 @@ def main() -> None:
             log.error("%s", exc)
             sys.exit(1)
 
-    # Init matrix display
+    # Import all modules before matrix init — rgbmatrix drop_privileges drops
+    # the process back to the invoking user after hardware init, which can
+    # disrupt subsequent imports from the venv.
     from transit_board.display.matrix import MatrixDisplay
+    from transit_board.loop import run
 
     try:
         matrix = MatrixDisplay(dev=args.dev, brightness=cfg.display.brightness)
     except RuntimeError as exc:
         log.error("%s", exc)
         sys.exit(1)
-
-    # Async main loop
-    from transit_board.loop import run
 
     event_loop = asyncio.new_event_loop()
 

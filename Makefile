@@ -49,7 +49,7 @@ install:
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 run:
-	uv run python -m transit_board
+	sudo .venv/bin/python -m transit_board
 
 # Dev mode: mock data, no matrix hardware required
 dev:
