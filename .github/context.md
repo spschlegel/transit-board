@@ -2,7 +2,7 @@
 
 > For AI assistant session resumption. Keep updated as project evolves.
 > Caveman mode (full) is active — see `.github/skills/caveman/Skill.md`.
-> Python 3.13. Last session: Python 3.13 upgrade + full visual polish pass.
+> Python 3.13. Last session: horizontal split layout + "when to leave" + multi-route bus support.
 
 ## What this is
 
@@ -26,13 +26,21 @@ RGB LED matrix transit departure board. Raspberry Pi 4 drives two chained 64×64
 ## Display layout (128×64 landscape)
 
 ```
-┌──────────────────────────────────┬──────────┐
-│  Departures  (left ¾ = ~96×64)  │  Clock   │
-│  Bus stop    ·  Metro stop       │  Temp    │
-│  scrolling rows per stop         │  Weather │
-│                                  │  UV idx  │
-└──────────────────────────────────┴──────────┘
+┌───────────────────────────────┬───────────────────────────────┐
+│  Stop 1  (64×32)              │  Stop 2  (64×32)              │
+│  [header]  stop name  ← lv4m │  [header]  stop name  ← lv8m │
+│  [chip] headsign        12m • │  [chip] headsign         3m • │
+│  [chip] headsign         5m • │  [chip] headsign         7m • │
+│  [chip] headsign        18m   │  [chip] headsign        14m   │
+├────────────┬──────┬───────────┴──┬──────────────────────────--┤
+│  12:34     │ 72°F │  ☀ Clear     │  UV 4  ████░░              │
+│  Mon 09    │      │              │                             │
+└────────────┴──────┴──────────────┴─────────────────────────────┘
 ```
+
+- **Top 32 px**: two stops side-by-side (64 px each). Header = 8 px, 3 departure rows × 8 px.
+- **Bottom 31 px** (info strip): Clock (34 px) · Temp (22 px) · Weather (40 px) · UV (32 px)
+- **Dividers**: horizontal at y=32; vertical stop divider at x=64; info strip dividers at x=34,56,96
 
 ## Stack decisions
 
@@ -54,11 +62,13 @@ RGB LED matrix transit departure board. Raspberry Pi 4 drives two chained 64×64
 git clone <repo>
 bash scripts/bootstrap.sh        # apt deps + uv install; restart shell after
 sudo make install-python         # adafruit script → select Bonnet + Quality → reboot
-make install                     # uv sync + hzeller bindings
+make install                     # uv sync + patches bindings setup.py (distutils→setuptools) + installs
 cp config.toml.example config.toml
 cp .env.example .env             # add MBTA_API_KEY
 make run
 ```
+
+> **Python 3.13 note**: `make install` auto-patches `rpi-rgb-led-matrix/bindings/python/setup.py` swapping `distutils` → `setuptools` (distutils removed in 3.12+).
 
 ## Repo structure (implemented)
 
@@ -70,19 +80,20 @@ transit-board/
 │   ├── __init__.py
 │   ├── __main__.py              argparse, --dev flag, SIGINT/SIGTERM shutdown
 │   ├── config.py                load config.toml + .env, dev_default()
-│   ├── loop.py                  async 20-FPS render loop, TTL caches, parallel fetches
+│   ├── loop.py                  async 20-FPS render loop, TTL caches, parallel fetches,
+│   │                            haversine walk-time init on startup
 │   ├── display/
-│   │   ├── layout.py            pixel geometry + colour constants
+│   │   ├── layout.py            pixel geometry + colour constants (horizontal-split layout)
 │   │   ├── matrix.py            rgbmatrix init OR pygame 4× dev preview
-│   │   └── renderer.py          get_font, new_canvas, draw_text_clipped (scrolling)
+│   │   └── renderer.py          get_font, new_canvas, draw_text_clipped, draw_panel_chrome
 │   ├── widgets/
-│   │   ├── departures.py        left 96×64 — route/headsign/minutes rows
-│   │   ├── clock.py             right sidebar — HH:MM + date
-│   │   ├── weather.py           right sidebar — °F + WMO condition label
-│   │   └── uv.py                right sidebar — UV index (WHO colour scale)
+│   │   ├── departures.py        top 128×32 — two stops side-by-side, leave-time header
+│   │   ├── clock.py             info strip clock section (x 0–33)
+│   │   ├── weather.py           info strip temp (x 34–55) + weather icon/label (x 56–95)
+│   │   └── uv.py                info strip UV section (x 96–127)
 │   └── providers/
 │       ├── cache.py             TTLCache[T] generic
-│       ├── transit.py           MBTAClient (httpx async) + mock_departures()
+│       ├── transit.py           MBTAClient: departures() + stop_coords() + mock_departures()
 │       └── weather.py           WeatherClient (Open-Meteo) + mock_weather()
 ├── .env.example
 ├── .github/
@@ -100,14 +111,38 @@ transit-board/
 
 ## Visual design (current)
 
-- **Departure panel** (left 95 px): 3 px coloured accent bar on stop headers; route "chips" (coloured badge with 20%-tint background); headsign scrolls when too long; minutes urgency-coloured (green ≤2 m, yellow ≤5 m, amber ≤9 m, white 10+, dim=scheduled); BRD blinks every 15 frames; realtime green dot top-right of row
-- **Sidebar** (right 32 px): clock (HH:MM + Mon DD), temperature (°F), 7×7 pixel-art weather icon + WMO label, UV index + WHO colour-scale progress bar
-- **Chrome**: 1 px vertical panel divider at x=95; 1 px horizontal sidebar section dividers at TEMP_Y/WEATHER_Y/UV_Y — drawn last so they're always on top
-- **Sidebar layout**: CLOCK 20 px · TEMP 13 px · WEATHER 18 px · UV 13 px = 64 px
+- **Transit panel** (top 32 px): two 64×32 stop columns. Header: 3 px coloured accent bar + stop name + right-aligned "when to leave" label. Rows: route chip (pad_x=1) + scrolling headsign + urgency-coloured minutes + realtime green dot. BRD blinks every 15 frames.
+- **Leave label** (header right): `LATE` red / `GO!` blinking green / `1m` blinking / `≤5m` yellow / else dim. Calculated as `dep.minutes − stop.walk_minutes`.
+- **Multi-route**: departures sorted by time regardless of route — next 3 shown from any mix of routes at stop.
+- **Info strip** (bottom 31 px): Clock (HH:MM size 10 + Mon DD size 7) · Temp (°F yellow) · Weather (7×7 pixel-art icon + WMO label teal) · UV (label + WHO colour-scale 2 px bar).
+- **Urgency colours**: green ≤2 m, yellow ≤5 m, amber ≤9 m, white 10+, dim = scheduled.
+- **Chrome**: drawn last on top — horizontal divider y=32, stop divider x=64, info dividers x=34/56/96.
+
+## Config (config.toml)
+
+```toml
+[location]
+lat = 42.3601
+lon = -71.0589
+walk_speed_kmh = 5.0      # used for auto walk-time calc
+
+[[stops]]
+id = "64"
+name = "Bus"
+type = "bus"
+# walk_minutes = 8        # optional override; auto-calc from coords if omitted
+
+[[stops]]
+id = "place-rugg"
+name = "Orange"
+type = "subway"
+```
+
+`StopConfig.walk_minutes` — `None` at load time if not set; populated on startup by `loop.py` via MBTA `/stops/{id}` → haversine distance → `round(dist_km / walk_speed_kmh * 60)`. Dev mode defaults to 8 min.
 
 ## Key open questions / next steps
 
-- **Stop IDs**: user must look up real bus + metro stop IDs at api-v3.mbta.com/stops
-- **Font**: Pillow built-in default font (size 7/8/10 pt). Custom TTF configurable via `font_path` arg in each widget — not yet exposed in config.toml
-- **Brightness schedule**: could dim at night — not implemented
-- **Multi-panel config**: hardcoded 2×64×64 chain; could be made configurable
+- **Stop IDs**: look up at api-v3.mbta.com/stops
+- **Font**: Pillow default (7/8/10 pt). Custom TTF: `font_path` arg per widget — not yet in config.toml
+- **Brightness schedule**: dim at night — not implemented
+- **Multi-panel config**: hardcoded 2×64×64 chain

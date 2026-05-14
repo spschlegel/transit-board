@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 from dataclasses import dataclass, field
 from typing import Optional
@@ -31,6 +32,18 @@ log = logging.getLogger(__name__)
 
 FRAME_INTERVAL = 1.0 / 20  # target ~20 FPS
 SCROLL_SPEED = 1  # pixels per frame (scroll advances each rendered frame)
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in km between two (lat, lon) points."""
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    )
+    return R * 2 * math.asin(math.sqrt(a))
 
 
 @dataclass
@@ -53,6 +66,28 @@ async def run(cfg: Config, matrix: MatrixDisplay, dev: bool = False) -> None:
     weather_cache: TTLCache[WeatherData] = TTLCache(cfg.refresh.weather_secs)
 
     state = AppState()
+
+    # ── Walk-time initialisation ──────────────────────────────────────────────
+    if dev:
+        for stop in cfg.stops:
+            if stop.walk_minutes is None:
+                stop.walk_minutes = 8
+        log.info("Dev mode: using 8 min walk time for all stops")
+    else:
+        for stop in cfg.stops:
+            if stop.walk_minutes is None:
+                try:
+                    lat, lon = await mbta.stop_coords(stop.id)
+                    dist_km = _haversine_km(cfg.lat, cfg.lon, lat, lon)
+                    stop.walk_minutes = max(1, round(dist_km / cfg.walk_speed_kmh * 60))
+                    log.info(
+                        "Stop %s: %.2f km from home \u2192 %d min walk",
+                        stop.id,
+                        dist_km,
+                        stop.walk_minutes,
+                    )
+                except Exception as exc:
+                    log.warning("Could not get walk time for stop %s: %s", stop.id, exc)
 
     if dev:
         # Seed with mock data immediately

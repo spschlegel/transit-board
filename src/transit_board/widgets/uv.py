@@ -1,4 +1,4 @@
-"""Right-sidebar UV-index widget: label + WHO colour-scale progress bar."""
+"""Info-strip UV-index section: label + WHO colour-scale progress bar."""
 
 from __future__ import annotations
 
@@ -31,13 +31,17 @@ def draw_uv(
     weather: Optional[WeatherData],
     font_path: str | None = None,
 ) -> None:
-    """Render UV index into the UV sidebar region."""
+    """Render UV index into the UV section of the bottom info strip."""
     draw = ImageDraw.Draw(image)
     font = get_font(font_path, size=8)
-    x0 = layout.SIDEBAR_X
 
+    x0 = layout.UV_X
+    w = layout.UV_W
+    y0 = layout.INFO_Y
+
+    # Background
     draw.rectangle(
-        [x0, layout.UV_Y, x0 + layout.SIDEBAR_W - 1, layout.UV_Y + layout.UV_H - 1],
+        [x0, y0, x0 + w - 1, y0 + layout.INFO_H - 1],
         fill=layout.SIDEBAR_BG,
     )
 
@@ -53,13 +57,13 @@ def draw_uv(
     # Centred label
     bbox = draw.textbbox((0, 0), label, font=font)
     tw = bbox[2] - bbox[0]
-    tx = x0 + max(0, (layout.SIDEBAR_W - tw) // 2)
-    draw.text((tx, layout.UV_Y + 2), label, font=font, fill=color)
+    tx = x0 + max(0, (w - tw) // 2)
+    draw.text((tx, y0 + 7), label, font=font, fill=color)
 
-    # Colour-scale progress bar (2 px tall, 3 px from section bottom)
-    bar_max = layout.SIDEBAR_W - 4  # 28 px
+    # Colour-scale progress bar (2 px tall, near bottom of section)
+    bar_max = w - 4  # 28 px usable
     bar_w = max(1, int(min(uv / _UV_MAX, 1.0) * bar_max)) if weather else 0
-    bar_y = layout.UV_Y + layout.UV_H - 3
+    bar_y = y0 + layout.INFO_H - 5
     if bar_w > 0:
         draw.rectangle(
             [x0 + 2, bar_y, x0 + 2 + bar_w - 1, bar_y + 1],

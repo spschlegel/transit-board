@@ -199,7 +199,7 @@ def _draw_icon(image: Image.Image, ox: int, oy: int, code: int) -> None:
             draw.point((ox + x, oy + y), fill=color)
 
 
-# ── Public draw functions ─────────────────────────────────────────────────────
+# ── Public draw function ──────────────────────────────────────────────────────
 
 
 def draw_weather(
@@ -207,41 +207,42 @@ def draw_weather(
     weather: Optional[WeatherData],
     font_path: str | None = None,
 ) -> None:
-    """Render temperature (TEMP region) and icon+label (WEATHER region)."""
+    """Render temperature (TEMP section) and icon+label (WEATHER section) in info strip."""
     draw = ImageDraw.Draw(image)
     font = get_font(font_path, size=8)
-    x0 = layout.SIDEBAR_X
 
-    # ── Temperature ───────────────────────────────────────────────────────────
+    # ── Temperature section ───────────────────────────────────────────────────
+    tx0 = layout.TEMP_X
     draw.rectangle(
-        [x0, layout.TEMP_Y, x0 + layout.SIDEBAR_W - 1, layout.TEMP_Y + layout.TEMP_H - 1],
+        [tx0, layout.INFO_Y, tx0 + layout.TEMP_W - 1, layout.INFO_Y + layout.INFO_H - 1],
         fill=layout.SIDEBAR_BG,
     )
     if weather is not None:
         temp_str = f"{weather.temperature_f:.0f}\u00b0F"  # °F
         bbox = draw.textbbox((0, 0), temp_str, font=font)
         tw = bbox[2] - bbox[0]
-        tx = x0 + max(0, (layout.SIDEBAR_W - tw) // 2)
-        draw.text((tx, layout.TEMP_Y + 3), temp_str, font=font, fill=layout.YELLOW)
+        tx = tx0 + max(0, (layout.TEMP_W - tw) // 2)
+        draw.text((tx, layout.INFO_Y + 11), temp_str, font=font, fill=layout.YELLOW)
     else:
-        draw.text((x0 + 6, layout.TEMP_Y + 3), "--F", font=font, fill=layout.DIM)
+        draw.text((tx0 + 2, layout.INFO_Y + 11), "--\u00b0F", font=font, fill=layout.DIM)
 
-    # ── Weather icon + label ──────────────────────────────────────────────────
+    # ── Weather icon + label section ──────────────────────────────────────────
+    wx0 = layout.WEATHER_X
     draw.rectangle(
-        [x0, layout.WEATHER_Y, x0 + layout.SIDEBAR_W - 1, layout.WEATHER_Y + layout.WEATHER_H - 1],
+        [wx0, layout.INFO_Y, wx0 + layout.WEATHER_W - 1, layout.INFO_Y + layout.INFO_H - 1],
         fill=layout.SIDEBAR_BG,
     )
     if weather is not None:
-        # Icon: 7×7 px, centred horizontally, 1 px below section top
-        icon_x = x0 + (layout.SIDEBAR_W - 7) // 2
-        icon_y = layout.WEATHER_Y + 1
+        # Icon: 7×7 px, centred horizontally, near top of section
+        icon_x = wx0 + (layout.WEATHER_W - 7) // 2
+        icon_y = layout.INFO_Y + 4
         _draw_icon(image, icon_x, icon_y, weather.weather_code)
 
-        # Label: below icon (icon top + 7px icon + 2px gap = +9)
+        # Label: centred below icon
         label = weather.label
         bbox = draw.textbbox((0, 0), label, font=font)
         lw = bbox[2] - bbox[0]
-        lx = x0 + max(0, (layout.SIDEBAR_W - lw) // 2)
-        draw.text((lx, layout.WEATHER_Y + 10), label, font=font, fill=layout.TEAL)
+        lx = wx0 + max(0, (layout.WEATHER_W - lw) // 2)
+        draw.text((lx, layout.INFO_Y + 15), label, font=font, fill=layout.TEAL)
     else:
-        draw.text((x0 + 8, layout.WEATHER_Y + 5), "---", font=font, fill=layout.DIM)
+        draw.text((wx0 + 12, layout.INFO_Y + 11), "---", font=font, fill=layout.DIM)

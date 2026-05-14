@@ -18,6 +18,7 @@ class StopConfig:
     id: str
     name: str
     type: str  # "bus" | "subway"
+    walk_minutes: int | None = None  # auto-calculated from coords; user can override in config.toml
 
 
 @dataclass
@@ -40,6 +41,7 @@ class Config:
     lon: float
     display: DisplayConfig = field(default_factory=DisplayConfig)
     refresh: RefreshConfig = field(default_factory=RefreshConfig)
+    walk_speed_kmh: float = 5.0  # walking speed for "when to leave" auto-calculation
 
 
 _DEFAULT_CONFIG = Path("config.toml")
@@ -64,7 +66,15 @@ def load(path: Path = _DEFAULT_CONFIG) -> Config:
         )
 
     loc = raw.get("location", {})
-    stops = [StopConfig(**s) for s in raw.get("stops", [])]
+    stops = [
+        StopConfig(
+            id=s["id"],
+            name=s["name"],
+            type=s["type"],
+            walk_minutes=int(s["walk_minutes"]) if "walk_minutes" in s else None,
+        )
+        for s in raw.get("stops", [])
+    ]
     if not stops:
         warnings.warn("No stops configured in config.toml", stacklevel=2)
 
@@ -87,6 +97,7 @@ def load(path: Path = _DEFAULT_CONFIG) -> Config:
         lon=float(loc.get("lon", -71.0589)),
         display=disp,
         refresh=ref,
+        walk_speed_kmh=float(loc.get("walk_speed_kmh", 5.0)),
     )
 
 
@@ -102,4 +113,5 @@ def dev_default() -> Config:
         lon=-71.0589,
         display=DisplayConfig(brightness=50, departures_per_stop=3),
         refresh=RefreshConfig(transit_secs=30, weather_secs=300),
+        walk_speed_kmh=5.0,
     )

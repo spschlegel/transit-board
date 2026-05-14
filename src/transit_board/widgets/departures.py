@@ -1,4 +1,4 @@
-"""Left-panel widget: departure rows with route chips and urgency colouring."""
+"""Transit panel widget: two stops side-by-side, each 64×32 px."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from transit_board.display.renderer import (
 )
 from transit_board.providers.transit import Departure
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Colour helpers ─────────────────────────────────────────────────────────────
 
 
 def _route_color(route: str, stop_type: str) -> tuple[int, int, int]:
@@ -38,12 +38,115 @@ def _minutes_color(minutes: int, realtime: bool) -> tuple[int, int, int]:
 
 
 def _minutes_label(minutes: int) -> str:
-    if minutes == 0:
-        return "BRD"
-    return f"{minutes}m"
+    return "BRD" if minutes == 0 else f"{minutes}m"
 
 
-# ── Public draw function ──────────────────────────────────────────────────────
+def _leave_str_color(leave_in: int, brd_bright: bool) -> tuple[str, tuple[int, int, int]]:
+    """Return (label, colour) for the 'when to leave' header indicator."""
+    if leave_in < 0:
+        return "LATE", layout.RED
+    if leave_in == 0:
+        col = layout.GREEN if brd_bright else (0, 120, 0)
+        return "GO!", col
+    if leave_in == 1:
+        col = layout.GREEN if brd_bright else layout.YELLOW
+        return "1m", col
+    if leave_in <= 5:
+        return f"{leave_in}m", layout.YELLOW
+    return f"{leave_in}m", layout.DIM
+
+
+# ── Single stop panel ──────────────────────────────────────────────────────────
+
+
+def _draw_stop_panel(
+    image: Image.Image,
+    stop: StopConfig,
+    deps: list[Departure],
+    n_rows: int,
+    scroll_offset: int,
+    brd_bright: bool,
+    font: object,
+    font_chip: object,
+    x0: int,
+    y0: int,
+) -> None:
+    draw = ImageDraw.Draw(image)
+    stop_color = layout.ROUTE_COLORS.get(stop.type, layout.WHITE)
+    pw = layout.STOP_W  # panel width
+
+    y = y0
+
+    # ── Header ────────────────────────────────────────────────────────────────
+    draw.rectangle([x0, y, x0 + pw - 1, y + layout.HEADER_H - 1], fill=layout.SIDEBAR_BG)
+    # 3 px coloured accent bar on left edge
+    draw.rectangle([x0, y, x0 + 2, y + layout.HEADER_H - 1], fill=stop_color)
+    # Stop name
+    draw.text((x0 + 5, y + 1), stop.name.upper(), font=font, fill=stop_color)
+
+    # "When to leave" — right-aligned, shows leave time for the next departure
+    if stop.walk_minutes is not None and deps:
+        leave_in = deps[0].minutes - stop.walk_minutes
+        lv_str, lv_color = _leave_str_color(leave_in, brd_bright)
+        lv_w = text_pixel_width(font, lv_str)
+        draw.text((x0 + pw - lv_w - 2, y + 1), lv_str, font=font, fill=lv_color)
+
+    y += layout.HEADER_H
+
+    # ── Departure rows ─────────────────────────────────────────────────────────
+    shown = 0
+    for dep in deps[:n_rows]:
+        if y >= y0 + layout.STOP_H:
+            break
+
+        route_color = _route_color(dep.route, stop.type)
+        route_text = dep.route[:4]  # trim to fit tight chip space
+
+        # Route chip (pad_x=1 to save horizontal room in 64 px panel)
+        chip_w = draw_chip(
+            image, x0 + 1, y + 1, route_text, route_color, font_chip, pad_x=1, chip_h=6
+        )
+
+        # Departure minutes (right-aligned, urgency-coloured)
+        min_label = _minutes_label(dep.minutes)
+        if min_label == "BRD":
+            min_color = layout.GREEN if brd_bright else (0, 130, 0)
+        else:
+            min_color = _minutes_color(dep.minutes, dep.realtime)
+
+        min_w = text_pixel_width(font, min_label)
+        # 2 px gap + 1 px realtime dot at far right
+        min_x = x0 + pw - min_w - 3
+        draw.text((min_x, y + 1), min_label, font=font, fill=min_color)
+
+        # Realtime dot (top-right corner of row)
+        if dep.realtime:
+            draw.point((x0 + pw - 1, y + 1), fill=layout.GREEN)
+
+        # Headsign (middle, scrolling when too wide)
+        hs_x = x0 + 1 + chip_w + 2
+        hs_max_w = min_x - hs_x - 2
+        if hs_max_w > 0 and dep.headsign:
+            draw_text_clipped(
+                image=image,
+                xy=(hs_x, y + 1),
+                text=dep.headsign,
+                font=font,
+                color=layout.DIM,
+                max_width=hs_max_w,
+                row_h=layout.ROW_H - 2,
+                scroll_offset=scroll_offset,
+            )
+
+        y += layout.ROW_H
+        shown += 1
+
+    # "No service" placeholder when stop has no predictions
+    if shown == 0:
+        draw.text((x0 + 5, y + 1), "No service", font=font, fill=layout.DIM)
+
+
+# ── Public draw function ───────────────────────────────────────────────────────
 
 
 def draw_departures(
@@ -56,103 +159,31 @@ def draw_departures(
     font_path: str | None = None,
 ) -> None:
     """
-    Render the departure board into the left 95×64 px region of *image*.
+    Render the transit panel into the top 128×32 px region of *image*.
 
-    Per stop (HEADER_H=8 + departures_per_stop×ROW_H=3×8=24 = 32 px):
-      • 3 px coloured left-edge accent bar
-      • Stop name right of bar
-      • Departure rows: [route chip] [scrolling headsign] [Nm / BRD]  •realtime dot
-    Two stops × 32 px = 64 px — fills the panel exactly.
+    Up to 2 stops are drawn side-by-side, each in a 64×32 px column:
+      • 8 px header: coloured accent bar + stop name + 'when to leave' label
+      • 3 × 8 px departure rows: route chip / scrolling headsign / minutes + dot
+
+    All bus lines at a stop are included; the 3 soonest are shown regardless of route.
     """
-    draw = ImageDraw.Draw(image)
     font = get_font(font_path, size=8)
     font_chip = get_font(font_path, size=7)
-
-    x0 = layout.DEPART_X
-    panel_w = layout.DEPART_W
-    y = layout.DEPART_Y
-
-    # BRD blink state: alternate every 15 frames
     brd_bright = (tick // 15) % 2 == 0
 
-    for stop in stops:
-        if y >= layout.DISPLAY_H:
-            break
-
+    for i, stop in enumerate(stops[:2]):
+        x0 = i * layout.STOP_W
+        y0 = layout.TRANSIT_Y
         deps = departures_by_stop.get(stop.id, [])
-        stop_color = layout.ROUTE_COLORS.get(stop.type, layout.WHITE)
-
-        # ── Stop header ───────────────────────────────────────────────────────
-        # Dark background
-        draw.rectangle([x0, y, x0 + panel_w - 1, y + layout.HEADER_H - 1], fill=layout.SIDEBAR_BG)
-        # 3 px coloured left accent bar
-        draw.rectangle([x0, y, x0 + 2, y + layout.HEADER_H - 1], fill=stop_color)
-        # Stop name
-        draw.text((x0 + 5, y + 1), stop.name.upper(), font=font, fill=stop_color)
-        y += layout.HEADER_H
-
-        # ── Departure rows ────────────────────────────────────────────────────
-        shown = 0
-        for dep in deps[:departures_per_stop]:
-            if y >= layout.DISPLAY_H:
-                break
-
-            route_color = _route_color(dep.route, stop.type)
-            route_text = dep.route[:5]
-
-            # Route chip
-            chip_w = draw_chip(
-                image,
-                x0 + 1,
-                y + 1,
-                route_text,
-                route_color,
-                font_chip,
-                pad_x=2,
-                chip_h=6,
-            )
-
-            # Minutes (right-aligned, urgency coloured)
-            min_label = _minutes_label(dep.minutes)
-            if min_label == "BRD":
-                min_color = layout.GREEN if brd_bright else (0, 130, 0)
-            else:
-                min_color = _minutes_color(dep.minutes, dep.realtime)
-
-            min_w = text_pixel_width(font, min_label)
-            # Reserve 1 px for realtime dot on the far right
-            min_x = x0 + panel_w - min_w - 3
-            draw.text((min_x, y + 1), min_label, font=font, fill=min_color)
-
-            # Realtime dot (top-right corner of the row)
-            if dep.realtime:
-                draw.point((x0 + panel_w - 1, y + 1), fill=layout.GREEN)
-
-            # Headsign (middle, scrolling if too long)
-            hs_x = x0 + 1 + chip_w + 3
-            hs_max_w = min_x - hs_x - 2
-            if hs_max_w > 0 and dep.headsign:
-                draw_text_clipped(
-                    image=image,
-                    xy=(hs_x, y + 1),
-                    text=dep.headsign,
-                    font=font,
-                    color=layout.DIM,
-                    max_width=hs_max_w,
-                    row_h=layout.ROW_H - 2,
-                    scroll_offset=scroll_offset,
-                )
-
-            y += layout.ROW_H
-            shown += 1
-
-        # Empty-stop placeholder
-        if shown == 0:
-            draw.text((x0 + 5, y + 1), "No service", font=font, fill=layout.DIM)
-
-        # Pad remaining rows so next stop header sits on the right pixel
-        y += (departures_per_stop - shown) * layout.ROW_H
-
-        # Thin inter-stop divider (skipped for last stop)
-        if y < layout.DISPLAY_H:
-            draw.line([x0 + 3, y - 1, x0 + panel_w - 1, y - 1], fill=(25, 25, 35))
+        _draw_stop_panel(
+            image,
+            stop,
+            deps,
+            departures_per_stop,
+            scroll_offset,
+            brd_bright,
+            font,
+            font_chip,
+            x0,
+            y0,
+        )

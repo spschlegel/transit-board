@@ -94,6 +94,17 @@ class MBTAClient:
 
         return results
 
+    async def stop_coords(self, stop_id: str) -> tuple[float, float]:
+        """Return (lat, lon) for *stop_id* from the MBTA stops API."""
+        try:
+            r = await self._http.get(f"/stops/{stop_id}")
+            r.raise_for_status()
+        except httpx.HTTPError as exc:
+            log.warning("MBTA stops fetch failed for %s: %s", stop_id, exc)
+            raise
+        attrs = r.json()["data"]["attributes"]
+        return float(attrs["latitude"]), float(attrs["longitude"])
+
     async def aclose(self) -> None:
         await self._http.aclose()
 
@@ -106,17 +117,20 @@ class MBTAClient:
 def mock_departures(stop_id: str, stop_type: str, max_results: int = 3) -> list[Departure]:
     """Return plausible fake departures for --dev mode."""
     if stop_type == "bus":
+        # Multiple routes mixed in chronological order — mirrors real multi-route stops
         pool = [
             Departure("39", "Forest Hills", 2, True),
-            Departure("39", "Forest Hills", 12, True),
-            Departure("39", "Forest Hills", 23, False),
             Departure("66", "Harvard", 5, True),
+            Departure("39", "Forest Hills", 13, True),
+            Departure("15", "Kane Sq", 18, False),
+            Departure("66", "Harvard", 21, True),
+            Departure("39", "Forest Hills", 28, False),
         ]
     else:
         pool = [
             Departure("OL", "Oak Grove", 3, True),
-            Departure("OL", "Oak Grove", 11, True),
-            Departure("OL", "Oak Grove", 20, False),
             Departure("OL", "Forest Hills", 7, True),
+            Departure("OL", "Oak Grove", 14, True),
+            Departure("OL", "Forest Hills", 21, False),
         ]
     return pool[:max_results]

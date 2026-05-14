@@ -1,51 +1,63 @@
 """
 Layout constants for the 128×64 display.
 
-Physical split:
-  Left  95×64  — departure rows   (x 0–94)
-  x=95          — 1 px vertical divider
-  Right 32×64  — sidebar: clock / temp / weather / UV  (x 96–127)
+Horizontal-split layout:
+  Top    128×32  — transit panel, two stops side-by-side  (y 0–31)
+  y=32           — 1 px horizontal divider
+  Bottom 128×31  — info strip: clock / temp / weather / UV  (y 33–63)
+
+Transit panel:
+  Left   64×32  — stop 1  (x 0–63)
+  x=64           — 1 px vertical stop divider
+  Right  64×32  — stop 2  (x 64–127)
+
+Info strip columns (vertical dividers drawn at x = 34, 56, 96):
+  Clock    x  0–33   (34 px)
+  Temp     x 34–55   (22 px)
+  Weather  x 56–95   (40 px)
+  UV       x 96–127  (32 px)
 """
 
 from __future__ import annotations
 
-# ── Physical display ──────────────────────────────────────────────────────────
+# ── Physical display ───────────────────────────────────────────────────────────
 DISPLAY_W = 128
 DISPLAY_H = 64
 
-# ── Left departure panel ──────────────────────────────────────────────────────
-DEPART_X = 0
-DEPART_Y = 0
-DEPART_W = 95  # cols 0–94; col 95 is the divider
-DEPART_H = 64
+# ── Transit panel (top 32 px) ──────────────────────────────────────────────────
+TRANSIT_Y = 0
+TRANSIT_H = 32
 
-# ── Vertical panel divider ────────────────────────────────────────────────────
-PANEL_DIV_X = 95
+STOP_W = 64  # each stop occupies half the width
+STOP_H = 32  # and the full transit panel height
 
-# ── Right sidebar ─────────────────────────────────────────────────────────────
-SIDEBAR_X = 96
-SIDEBAR_Y = 0
-SIDEBAR_W = 32
-SIDEBAR_H = 64
+STOP_DIV_X = 64  # x of 1 px vertical divider between stops
 
-# ── Row heights (pixels) ──────────────────────────────────────────────────────
+# ── Row heights within each stop panel ────────────────────────────────────────
+HEADER_H = 8  # stop-name / leave-time header row
 ROW_H = 8  # one departure row
-HEADER_H = 8  # stop-name header row
-# 2 stops × (HEADER_H + 3×ROW_H) = 2×32 = 64 — fills left panel exactly
+# HEADER_H + 3 × ROW_H = 32 = STOP_H ✓
 
-# ── Sidebar sub-region Y offsets & heights ────────────────────────────────────
-CLOCK_Y = 0
-CLOCK_H = 20  # HH:MM + Mon DD
+# ── Horizontal divider between transit and info strip ─────────────────────────
+HORIZ_DIV_Y = 32  # y of the 1 px separator line
 
-TEMP_Y = 20
-TEMP_H = 13  # temperature in °F
+# ── Info strip (y 33–63 = 31 px tall) ─────────────────────────────────────────
+INFO_Y = 33
+INFO_H = 31  # 63 − 33 + 1
 
-WEATHER_Y = 33
-WEATHER_H = 18  # 7px icon + 2px gap + 8px label = 17, + 1px margin
+CLOCK_X = 0
+CLOCK_W = 34
 
-UV_Y = 51
-UV_H = 13  # text + 3px colour bar at bottom
-# Sidebar total: 20+13+18+13 = 64 ✓
+TEMP_X = 34
+TEMP_W = 22
+
+WEATHER_X = 56
+WEATHER_W = 40
+
+UV_X = 96
+UV_W = 32
+
+INFO_DIV_XS: tuple[int, ...] = (34, 56, 96)  # x positions of vertical info-strip dividers
 
 # ── Colours (R, G, B) ─────────────────────────────────────────────────────────
 BLACK = (0, 0, 0)
@@ -59,18 +71,18 @@ YELLOW = (255, 215, 0)
 BLUE = (70, 130, 255)
 PURPLE = (185, 45, 235)
 
-SIDEBAR_BG = (0, 0, 20)  # right sidebar background tint
-PANEL_DIVIDER = (35, 35, 45)  # vertical separator line
-SECTION_DIV = (18, 18, 28)  # horizontal sidebar section dividers
+SIDEBAR_BG = (0, 0, 20)  # header / info strip background tint
+PANEL_DIVIDER = (35, 35, 45)  # main structural divider lines
+SECTION_DIV = (18, 18, 28)  # secondary info-strip dividers
 
-# ── Route type → default text colour ─────────────────────────────────────────
+# ── Route type → default text colour ──────────────────────────────────────────
 ROUTE_COLORS: dict[str, tuple[int, int, int]] = {
     "bus": TEAL,
     "subway": ORANGE,
     "default": WHITE,
 }
 
-# ── MBTA named line → colour (keys must be lowercase) ────────────────────────
+# ── MBTA named line → colour (keys must be lowercase) ─────────────────────────
 LINE_COLORS: dict[str, tuple[int, int, int]] = {
     "red": RED,
     "rl": RED,

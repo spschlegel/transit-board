@@ -34,7 +34,10 @@ install:
 	fi
 	@echo "==> Creating venv and syncing dependencies..."
 	uv sync --group dev
+	@echo "==> Patching hzeller bindings for Python 3.12+ (distutils removed)..."
+	sed -i 's/from distutils.core import/from setuptools import/g' ./$(HZELLER_DIR)/bindings/python/setup.py
 	@echo "==> Installing rpi-rgb-led-matrix Python bindings..."
+	uv pip install setuptools
 	uv pip install ./$(HZELLER_DIR)/bindings/python/
 	@echo ""
 	@echo "Installation complete. Next:"

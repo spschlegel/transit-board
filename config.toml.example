@@ -3,29 +3,34 @@
 # MBTA API key goes in .env as MBTA_API_KEY (never commit config.toml or .env)
 #
 # Find stop IDs at: https://api-v3.mbta.com/stops
-# Find your coordinates at: https://www.latlong.net/
+# Find your home coordinates at: https://www.latlong.net/
 
 [location]
-lat = 42.3601   # Boston, MA
-lon = -71.0589
+lat = 42.3601    # your home latitude
+lon = -71.0589   # your home longitude
+walk_speed_kmh = 5.0  # walking speed used for "when to leave" (default: 5 km/h ≈ 3 mph)
 
-# Up to 2 stops are displayed (one in each half of the left panel).
+# Up to 2 stops shown side-by-side in the top half of the display.
+# All bus lines at a stop are included — only the 3 soonest departures are shown.
 # type: "bus" or "subway"
+# walk_minutes: optional hard-coded override; auto-calculated from coordinates if omitted
 
 [[stops]]
 id = "64"              # Example: Ruggles bus stop
 name = "Bus"
 type = "bus"
+# walk_minutes = 8    # uncomment to hard-code walk time instead of auto-calculating
 
 [[stops]]
 id = "place-rugg"      # Example: Ruggles Orange Line
 name = "Orange"
 type = "subway"
+# walk_minutes = 12
 
 [display]
 brightness = 50          # 0–100 — panel LED brightness
-departures_per_stop = 3  # departure rows shown per stop
+departures_per_stop = 3  # rows shown per stop (3 fills the top panel exactly)
 
 [refresh]
-transit_secs = 30        # how often to re-fetch MBTA predictions
-weather_secs = 300       # how often to re-fetch weather (Open-Meteo)
+transit_secs = 30        # how often to re-fetch MBTA predictions (seconds)
+weather_secs = 300       # how often to re-fetch weather from Open-Meteo (seconds)

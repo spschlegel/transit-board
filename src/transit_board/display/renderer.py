@@ -113,27 +113,30 @@ def draw_chip(
 
 def draw_panel_chrome(image: Image.Image) -> None:
     """
-    Draw structural chrome on top of all widget layers:
-      • Vertical panel divider at PANEL_DIV_X
-      • Horizontal sidebar section dividers at TEMP_Y, WEATHER_Y, UV_Y
+    Draw structural chrome on top of all widget layers (always drawn last):
+      • Horizontal divider at HORIZ_DIV_Y — full width
+      • Vertical stop divider at STOP_DIV_X — transit panel only (y 0..TRANSIT_H-1)
+      • Vertical info-strip dividers at INFO_DIV_XS — info strip only (y INFO_Y..DISPLAY_H-1)
     """
-    # Import here to avoid circular imports at module load time
     from transit_board.display import layout
 
     draw = ImageDraw.Draw(image)
 
-    # Vertical divider
+    # Horizontal transit / info-strip divider
     draw.line(
-        [(layout.PANEL_DIV_X, 0), (layout.PANEL_DIV_X, layout.DISPLAY_H - 1)],
+        [(0, layout.HORIZ_DIV_Y), (layout.DISPLAY_W - 1, layout.HORIZ_DIV_Y)],
         fill=layout.PANEL_DIVIDER,
     )
 
-    # Horizontal sidebar section dividers
-    for sect_y in (layout.TEMP_Y, layout.WEATHER_Y, layout.UV_Y):
+    # Vertical divider between stop 1 and stop 2 (transit panel only)
+    draw.line(
+        [(layout.STOP_DIV_X, 0), (layout.STOP_DIV_X, layout.TRANSIT_H - 1)],
+        fill=layout.PANEL_DIVIDER,
+    )
+
+    # Vertical dividers within the info strip
+    for div_x in layout.INFO_DIV_XS:
         draw.line(
-            [
-                (layout.SIDEBAR_X, sect_y),
-                (layout.SIDEBAR_X + layout.SIDEBAR_W - 1, sect_y),
-            ],
+            [(div_x, layout.INFO_Y), (div_x, layout.DISPLAY_H - 1)],
             fill=layout.SECTION_DIV,
         )

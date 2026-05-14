@@ -1,4 +1,4 @@
-"""Right-sidebar clock widget: HH:MM + short date."""
+"""Info-strip clock section: HH:MM + short date, bottom-left of display."""
 
 from __future__ import annotations
 
@@ -11,18 +11,20 @@ from transit_board.display.renderer import get_font
 
 
 def draw_clock(image: Image.Image, font_path: str | None = None) -> None:
-    """Render the clock into the CLOCK region of the sidebar."""
+    """Render the clock into the CLOCK section of the bottom info strip."""
     draw = ImageDraw.Draw(image)
     now = datetime.now()
 
     font_time = get_font(font_path, size=10)
     font_date = get_font(font_path, size=7)
 
-    x0 = layout.SIDEBAR_X
+    x0 = layout.CLOCK_X
+    w = layout.CLOCK_W
+    y0 = layout.INFO_Y
 
     # Background
     draw.rectangle(
-        [x0, layout.CLOCK_Y, x0 + layout.SIDEBAR_W - 1, layout.CLOCK_Y + layout.CLOCK_H - 1],
+        [x0, y0, x0 + w - 1, y0 + layout.INFO_H - 1],
         fill=layout.SIDEBAR_BG,
     )
 
@@ -30,12 +32,12 @@ def draw_clock(image: Image.Image, font_path: str | None = None) -> None:
     time_str = now.strftime("%H:%M")
     bbox = draw.textbbox((0, 0), time_str, font=font_time)
     tw = bbox[2] - bbox[0]
-    tx = x0 + max(0, (layout.SIDEBAR_W - tw) // 2)
-    draw.text((tx, layout.CLOCK_Y + 2), time_str, font=font_time, fill=layout.WHITE)
+    tx = x0 + max(0, (w - tw) // 2)
+    draw.text((tx, y0 + 4), time_str, font=font_time, fill=layout.WHITE)
 
-    # Date — "Fri 09", smaller, dimmer
+    # Date — "Fri 09", smaller, dimmer, centred below time
     date_str = now.strftime("%a %d")
     bbox_d = draw.textbbox((0, 0), date_str, font=font_date)
     dw = bbox_d[2] - bbox_d[0]
-    dx = x0 + max(0, (layout.SIDEBAR_W - dw) // 2)
-    draw.text((dx, layout.CLOCK_Y + 13), date_str, font=font_date, fill=layout.DIM)
+    dx = x0 + max(0, (w - dw) // 2)
+    draw.text((dx, y0 + 19), date_str, font=font_date, fill=layout.DIM)
