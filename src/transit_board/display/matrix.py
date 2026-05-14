@@ -110,7 +110,8 @@ class MatrixDisplay:
             else:
                 img.save("/tmp/transit_board_frame.png")
         else:
-            self._canvas.SetImage(img)
+            # unsafe=True uses image.im.unsafe_ptrs, a Pillow internal removed in Pillow 12
+            self._canvas.SetImage(img, unsafe=False)
             self._canvas = self._matrix.SwapOnVSync(self._canvas)
 
     def _render_pygame(self, img: Image.Image) -> None:
