@@ -34,8 +34,10 @@ install:
 	fi
 	@echo "==> Creating venv and syncing dependencies..."
 	uv sync --group dev
+	@echo "==> Taking ownership of $(HZELLER_DIR) (created by sudo install-python)..."
+	sudo chown -R $$USER ./$(HZELLER_DIR)
 	@echo "==> Patching hzeller bindings for Python 3.12+ (distutils removed)..."
-	sudo sed -i 's/from distutils.core import/from setuptools import/g' ./$(HZELLER_DIR)/bindings/python/setup.py
+	sed -i 's/from distutils.core import/from setuptools import/g' ./$(HZELLER_DIR)/bindings/python/setup.py
 	@echo "==> Installing rpi-rgb-led-matrix Python bindings..."
 	uv pip install setuptools
 	uv pip install ./$(HZELLER_DIR)/bindings/python/

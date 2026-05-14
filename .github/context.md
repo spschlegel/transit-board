@@ -61,8 +61,9 @@ RGB LED matrix transit departure board. Raspberry Pi 4 drives two chained 64×64
 ```
 git clone <repo>
 bash scripts/bootstrap.sh        # apt deps + uv install; restart shell after
-sudo make install-python         # adafruit script → select Bonnet + Quality → reboot
-make install                     # uv sync + patches bindings setup.py (distutils→setuptools) + installs
+make install-python               # adafruit script → select Bonnet + Quality → reboot
+                                  # (Makefile calls sudo bash internally — do NOT prefix with sudo)
+make install                      # uv sync + patches bindings setup.py (distutils→setuptools) + installs
 cp config.toml.example config.toml
 cp .env.example .env             # add MBTA_API_KEY
 make run
