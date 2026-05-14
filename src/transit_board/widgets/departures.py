@@ -81,15 +81,38 @@ def _draw_stop_panel(
     draw.rectangle([x0, y, x0 + pw - 1, y + layout.HEADER_H - 1], fill=layout.SIDEBAR_BG)
     # 3 px coloured accent bar on left edge
     draw.rectangle([x0, y, x0 + 2, y + layout.HEADER_H - 1], fill=stop_color)
-    # Stop name
-    draw.text((x0 + 5, y + 1), stop.name.upper(), font=font, fill=stop_color)
 
-    # "When to leave" — right-aligned, shows leave time for the next departure
+    # Compute leave-time label first so we know how much space it takes
+    lv_str: str | None = None
+    lv_w = 0
+    lv_color: tuple[int, int, int] = layout.DIM
     if stop.walk_minutes is not None and deps:
         leave_in = deps[0].minutes - stop.walk_minutes
         lv_str, lv_color = _leave_str_color(leave_in, brd_bright)
         lv_w = text_pixel_width(font, lv_str)
+
+    if lv_str:
+        # Leave time right-aligned
         draw.text((x0 + pw - lv_w - 2, y + 1), lv_str, font=font, fill=lv_color)
+        # Dim vertical separator: 1 px line between name area and leave time
+        sep_x = x0 + pw - lv_w - 4
+        draw.line([(sep_x, y + 1), (sep_x, y + layout.HEADER_H - 2)], fill=layout.DIM)
+
+    # Stop name — scrolls if it overflows the available space
+    name_max_w = pw - 5 - (lv_w + 6 if lv_str else 2)
+    draw_text_clipped(
+        image=image,
+        xy=(x0 + 5, y + 1),
+        text=stop.name.upper(),
+        font=font,
+        color=stop_color,
+        max_width=max(1, name_max_w),
+        row_h=layout.HEADER_H - 1,
+        scroll_offset=scroll_offset,
+        pause_frames=80,
+        end_pause_frames=40,
+        scroll_speed_inv=3,
+    )
 
     y += layout.HEADER_H
 
@@ -134,7 +157,7 @@ def _draw_stop_panel(
                 font=font,
                 color=layout.DIM,
                 max_width=hs_max_w,
-                row_h=layout.ROW_H - 2,
+                row_h=layout.ROW_H,
                 scroll_offset=scroll_offset,
             )
 

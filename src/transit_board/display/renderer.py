@@ -54,12 +54,20 @@ def draw_text_clipped(
     max_width: int,
     row_h: int = 8,
     scroll_offset: int = 0,
+    pause_frames: int = 60,
+    end_pause_frames: int = 40,
+    scroll_speed_inv: int = 2,
 ) -> None:
     """
     Draw *text* at *xy*, clipped to *max_width* pixels.
 
-    If the text is wider it scrolls horizontally using *scroll_offset* (px).
-    A 16 px gap separates the end of the text from the looped start.
+    If the text is wider than *max_width*, it uses a pause-scroll-pause cycle:
+      1. Show start of text for *pause_frames* frames (start pause)
+      2. Scroll 1 px per *scroll_speed_inv* frames until end of text is visible
+      3. Hold end of text for *end_pause_frames* frames (end pause)
+      4. Jump back to start and repeat
+
+    *scroll_offset* is treated as a frame counter (increments by 1 per frame).
     """
     tw = text_pixel_width(font, text)
 
@@ -68,15 +76,26 @@ def draw_text_clipped(
         draw.text(xy, text, font=font, fill=color)
         return
 
-    gap = 16
-    period = tw + gap
-    surf = Image.new("RGB", (period * 2, row_h), (0, 0, 0))
+    overflow = tw - max_width
+    scroll_frames = overflow * scroll_speed_inv
+    cycle = pause_frames + scroll_frames + end_pause_frames
+
+    phase = int(scroll_offset) % cycle
+    if phase < pause_frames:
+        visual_offset = 0
+    elif phase < pause_frames + scroll_frames:
+        visual_offset = (phase - pause_frames) // scroll_speed_inv
+    else:
+        visual_offset = overflow
+
+    # Render text onto a surface wide enough and crop the visible window
+    surf_w = tw + 4
+    surf = Image.new("RGB", (surf_w, row_h), (0, 0, 0))
     surf_draw = ImageDraw.Draw(surf)
     surf_draw.text((0, 0), text, font=font, fill=color)
-    surf_draw.text((period, 0), text, font=font, fill=color)
 
-    offset = int(scroll_offset) % period
-    clip = surf.crop((offset, 0, offset + max_width, row_h))
+    visual_offset = max(0, min(visual_offset, surf_w - max_width))
+    clip = surf.crop((visual_offset, 0, visual_offset + max_width, row_h))
     image.paste(clip, (xy[0], xy[1]))
 
 

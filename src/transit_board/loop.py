@@ -124,7 +124,7 @@ async def run(cfg: Config, matrix: MatrixDisplay, dev: bool = False) -> None:
                 tick=state.tick,
             )
             clock_widget.draw_clock(image=image)
-            weather_widget.draw_weather(image=image, weather=state.weather)
+            weather_widget.draw_weather(image=image, weather=state.weather, tick=state.tick)
             uv_widget.draw_uv(image=image, weather=state.weather)
 
             draw_panel_chrome(image)  # divider + section lines on top

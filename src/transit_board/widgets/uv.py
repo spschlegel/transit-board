@@ -47,18 +47,30 @@ def draw_uv(
 
     if weather is not None:
         uv = weather.uv_index
+        uv_max = weather.uv_index_max
         label = f"UV {uv:.0f}"
         color = _uv_color(uv)
+        max_label = f"\u2191{uv_max:.0f}"  # ↑ + today's max
+        max_color = _uv_color(uv_max)
     else:
         uv = 0.0
+        uv_max = 0.0
         label = "UV --"
+        max_label = "\u2191 --"
         color = layout.DIM
+        max_color = layout.DIM
 
-    # Centred label
+    # Line 1: current UV label
     bbox = draw.textbbox((0, 0), label, font=font)
     tw = bbox[2] - bbox[0]
     tx = x0 + max(0, (w - tw) // 2)
-    draw.text((tx, y0 + 7), label, font=font, fill=color)
+    draw.text((tx, y0 + 3), label, font=font, fill=color)
+
+    # Line 2: today's max UV
+    bbox = draw.textbbox((0, 0), max_label, font=font)
+    tw = bbox[2] - bbox[0]
+    tx = x0 + max(0, (w - tw) // 2)
+    draw.text((tx, y0 + 13), max_label, font=font, fill=max_color)
 
     # Colour-scale progress bar (2 px tall, near bottom of section)
     bar_max = w - 4  # 28 px usable

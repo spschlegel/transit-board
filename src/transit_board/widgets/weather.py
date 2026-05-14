@@ -205,44 +205,69 @@ def _draw_icon(image: Image.Image, ox: int, oy: int, code: int) -> None:
 def draw_weather(
     image: Image.Image,
     weather: Optional[WeatherData],
+    tick: int = 0,
     font_path: str | None = None,
 ) -> None:
     """Render temperature (TEMP section) and icon+label (WEATHER section) in info strip."""
     draw = ImageDraw.Draw(image)
     font = get_font(font_path, size=8)
+    font_sm = get_font(font_path, size=7)
 
-    # ── Temperature section ───────────────────────────────────────────────────
+    # ── Temperature section ─────────────────────────────────────────────────────
     tx0 = layout.TEMP_X
     draw.rectangle(
         [tx0, layout.INFO_Y, tx0 + layout.TEMP_W - 1, layout.INFO_Y + layout.INFO_H - 1],
         fill=layout.SIDEBAR_BG,
     )
     if weather is not None:
-        temp_str = f"{weather.temperature_f:.0f}\u00b0F"  # °F
+        temp_str = f"{weather.temperature_c:.0f}\u00b0C"  # °C
         bbox = draw.textbbox((0, 0), temp_str, font=font)
         tw = bbox[2] - bbox[0]
         tx = tx0 + max(0, (layout.TEMP_W - tw) // 2)
         draw.text((tx, layout.INFO_Y + 11), temp_str, font=font, fill=layout.YELLOW)
     else:
-        draw.text((tx0 + 2, layout.INFO_Y + 11), "--\u00b0F", font=font, fill=layout.DIM)
+        draw.text((tx0 + 2, layout.INFO_Y + 11), "--\u00b0C", font=font, fill=layout.DIM)
 
-    # ── Weather icon + label section ──────────────────────────────────────────
+    # ── Weather section: current icon (left) + forecast icon (right) ───────────────────
+    # Layout (40 px wide, 31 px tall):
+    #   Left 19 px  — current icon + "NOW" label
+    #   1 px sep at wx0+19
+    #   Right 20 px — forecast icon + "DAY" label
+    #   Bottom row: current condition label, full width
     wx0 = layout.WEATHER_X
+    ww = layout.WEATHER_W  # 40
+    y0 = layout.INFO_Y
     draw.rectangle(
-        [wx0, layout.INFO_Y, wx0 + layout.WEATHER_W - 1, layout.INFO_Y + layout.INFO_H - 1],
+        [wx0, y0, wx0 + ww - 1, y0 + layout.INFO_H - 1],
         fill=layout.SIDEBAR_BG,
     )
     if weather is not None:
-        # Icon: 7×7 px, centred horizontally, near top of section
-        icon_x = wx0 + (layout.WEATHER_W - 7) // 2
-        icon_y = layout.INFO_Y + 4
-        _draw_icon(image, icon_x, icon_y, weather.weather_code)
+        # Icons at top of section
+        left_icon_x = wx0 + (19 - 7) // 2  # centred in left 19 px
+        right_icon_x = wx0 + 20 + (20 - 7) // 2  # centred in right 20 px
+        icon_y = y0 + 2
+        _draw_icon(image, left_icon_x, icon_y, weather.weather_code)
+        _draw_icon(image, right_icon_x, icon_y, weather.forecast_weather_code)
 
-        # Label: centred below icon
+        # Thin vertical separator between the two halves
+        draw.line(
+            [(wx0 + 19, y0 + 2), (wx0 + 19, y0 + 18)],
+            fill=layout.SECTION_DIV,
+        )
+
+        # Sub-labels under icons (size 7)
+        for label_txt, half_x, half_w in (("NOW", wx0, 19), ("DAY", wx0 + 20, 20)):
+            bbox = draw.textbbox((0, 0), label_txt, font=font_sm)
+            lw = bbox[2] - bbox[0]
+            draw.text(
+                (half_x + (half_w - lw) // 2, y0 + 11), label_txt, font=font_sm, fill=layout.DIM
+            )
+
+        # Current condition label centred across full width at bottom
         label = weather.label
         bbox = draw.textbbox((0, 0), label, font=font)
         lw = bbox[2] - bbox[0]
-        lx = wx0 + max(0, (layout.WEATHER_W - lw) // 2)
-        draw.text((lx, layout.INFO_Y + 15), label, font=font, fill=layout.TEAL)
+        lx = wx0 + max(0, (ww - lw) // 2)
+        draw.text((lx, y0 + 21), label, font=font, fill=layout.TEAL)
     else:
-        draw.text((wx0 + 12, layout.INFO_Y + 11), "---", font=font, fill=layout.DIM)
+        draw.text((wx0 + 12, y0 + 11), "---", font=font, fill=layout.DIM)

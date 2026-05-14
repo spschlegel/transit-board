@@ -53,6 +53,8 @@ class WeatherData:
     temperature_c: float
     weather_code: int
     uv_index: float
+    uv_index_max: float = 0.0  # today's daily UV maximum
+    forecast_weather_code: int = 0  # today's overall forecast WMO code
 
     @property
     def temperature_f(self) -> float:
@@ -61,6 +63,10 @@ class WeatherData:
     @property
     def label(self) -> str:
         return _wmo_label(self.weather_code)
+
+    @property
+    def forecast_label(self) -> str:
+        return _wmo_label(self.forecast_weather_code)
 
 
 class WeatherClient:
@@ -77,8 +83,10 @@ class WeatherClient:
                     "latitude": self._lat,
                     "longitude": self._lon,
                     "current": "temperature_2m,weather_code,uv_index",
+                    "daily": "weather_code,uv_index_max",
                     "temperature_unit": "celsius",
                     "timezone": "auto",
+                    "forecast_days": 1,
                 },
             )
             r.raise_for_status()
@@ -88,10 +96,15 @@ class WeatherClient:
 
         body = r.json()
         cur = body["current"]
+        daily = body.get("daily", {})
+        daily_codes = daily.get("weather_code", [])
+        daily_uv_max = daily.get("uv_index_max", [])
         return WeatherData(
             temperature_c=float(cur["temperature_2m"]),
             weather_code=int(cur["weather_code"]),
             uv_index=float(cur.get("uv_index", 0.0)),
+            uv_index_max=float(daily_uv_max[0]) if daily_uv_max else 0.0,
+            forecast_weather_code=int(daily_codes[0]) if daily_codes else 0,
         )
 
     async def aclose(self) -> None:
@@ -100,4 +113,10 @@ class WeatherClient:
 
 def mock_weather() -> WeatherData:
     """Return fake weather data for --dev mode."""
-    return WeatherData(temperature_c=22.0, weather_code=1, uv_index=4.5)
+    return WeatherData(
+        temperature_c=22.0,
+        weather_code=1,
+        uv_index=4.5,
+        uv_index_max=7.0,
+        forecast_weather_code=3,  # Cloudy (for visible contrast in dev)
+    )

@@ -2,7 +2,7 @@
 
 > For AI assistant session resumption. Keep updated as project evolves.
 > Caveman mode (full) is active — see `.github/skills/caveman/Skill.md`.
-> Python 3.13. Last session: horizontal split layout + "when to leave" + multi-route bus support.
+> Python 3.13. Last session: display polish — °C temp, forecast in UV+weather, scroll pause-switch, header scroll fix.
 
 ## What this is
 
@@ -69,7 +69,17 @@ cp .env.example .env             # add MBTA_API_KEY
 make run
 ```
 
-> **Python 3.13 note**: `make install` auto-patches `rpi-rgb-led-matrix/bindings/python/setup.py` swapping `distutils` → `setuptools` (distutils removed in 3.12+). Patch uses `sudo sed` — run `make install` as **normal user**, not root (root lacks `uv` in PATH).
+> **Python 3.13 note**: `make install` auto-patches `rpi-rgb-led-matrix/bindings/python/setup.py` swapping `distutils` -> `setuptools` (distutils removed in 3.12+). Run `make install` as **normal user** — Makefile uses `sudo chown` + `sudo sed` internally; running as root breaks `uv` (not in root PATH).
+
+## Known Pi gotchas (resolved)
+
+| Issue | Cause | Fix |
+|---|---|---|
+| `sed: Permission denied` on install | `rpi-rgb-led-matrix/` owned by root (created by adafruit script) | `Makefile` does `sudo chown -R $$USER` before patch |
+| `uv: No such file or directory` under sudo | `uv` installed in user `~/.local/bin`, not root PATH | Never run `make install` or `make run` as root |
+| `ModuleNotFoundError: transit_board.loop` at runtime | `rgbmatrix` `drop_privileges=True` drops process UID mid-run, breaking venv imports | All module imports before matrix init in `__main__.py`; `drop_privileges=False` in `matrix.py` |
+| `AttributeError: 'ImagingCore' has no attribute 'unsafe_ptrs'` | hzeller `SetImage(unsafe=True)` uses Pillow internal removed in Pillow 12 | `SetImage(img, unsafe=False)` in `matrix.py` |
+| `make run` needs root | rgbmatrix requires hardware register access | `make run` target uses `sudo .venv/bin/python` |
 
 ## Repo structure (implemented)
 
@@ -112,10 +122,11 @@ transit-board/
 
 ## Visual design (current)
 
-- **Transit panel** (top 32 px): two 64×32 stop columns. Header: 3 px coloured accent bar + stop name + right-aligned "when to leave" label. Rows: route chip (pad_x=1) + scrolling headsign + urgency-coloured minutes + realtime green dot. BRD blinks every 15 frames.
+- **Transit panel** (top 32 px): two 64×32 stop columns. Header: 3 px coloured accent bar + scrolling stop name + 1 px dim separator + right-aligned "when to leave" label. Rows: route chip (pad_x=1) + scrolling headsign + urgency-coloured minutes + realtime green dot. BRD blinks every 15 frames.
 - **Leave label** (header right): `LATE` red / `GO!` blinking green / `1m` blinking / `≤5m` yellow / else dim. Calculated as `dep.minutes − stop.walk_minutes`.
+- **Scroll behaviour**: pause-then-scroll-then-pause cycle. Header: 80 frame pause / speed_inv=3. Headsigns: 60 frame pause / speed_inv=2 / 40 frame end-pause. Row clip height fixed to ROW_H (was ROW_H-2 = 6, clipping font bottom).
 - **Multi-route**: departures sorted by time regardless of route — next 3 shown from any mix of routes at stop.
-- **Info strip** (bottom 31 px): Clock (HH:MM size 10 + Mon DD size 7) · Temp (°F yellow) · Weather (7×7 pixel-art icon + WMO label teal) · UV (label + WHO colour-scale 2 px bar).
+- **Info strip** (bottom 31 px): Clock (HH:MM size 10 + Mon DD size 7) · Temp (°C yellow) · Weather (dual-icon: NOW|DAY icons + current condition label) · UV (current + today's max ↑N + WHO bar).
 - **Urgency colours**: green ≤2 m, yellow ≤5 m, amber ≤9 m, white 10+, dim = scheduled.
 - **Chrome**: drawn last on top — horizontal divider y=32, stop divider x=64, info dividers x=34/56/96.
 
