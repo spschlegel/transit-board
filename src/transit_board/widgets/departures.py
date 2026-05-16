@@ -41,21 +41,6 @@ def _minutes_label(minutes: int) -> str:
     return "BRD" if minutes == 0 else f"{minutes}m"
 
 
-def _leave_str_color(leave_in: int, brd_bright: bool) -> tuple[str, tuple[int, int, int]]:
-    """Return (label, colour) for the 'when to leave' header indicator."""
-    if leave_in < 0:
-        return "LATE", layout.RED
-    if leave_in == 0:
-        col = layout.GREEN if brd_bright else (0, 120, 0)
-        return "GO!", col
-    if leave_in == 1:
-        col = layout.GREEN if brd_bright else layout.YELLOW
-        return "1m", col
-    if leave_in <= 5:
-        return f"{leave_in}m", layout.YELLOW
-    return f"{leave_in}m", layout.DIM
-
-
 # ── Single stop panel ──────────────────────────────────────────────────────────
 
 
@@ -77,37 +62,17 @@ def _draw_stop_panel(
 
     y = y0
 
-    # ── Header ────────────────────────────────────────────────────────────────
+    # ── Header: accent bar + scrolling stop name (full width) ───────────────────────
     draw.rectangle([x0, y, x0 + pw - 1, y + layout.HEADER_H - 1], fill=layout.SIDEBAR_BG)
-    # 3 px coloured accent bar on left edge
     draw.rectangle([x0, y, x0 + 2, y + layout.HEADER_H - 1], fill=stop_color)
-
-    # Compute leave-time label first so we know how much space it takes
-    lv_str: str | None = None
-    lv_w = 0
-    lv_color: tuple[int, int, int] = layout.DIM
-    if stop.walk_minutes is not None and deps:
-        leave_in = deps[0].minutes - stop.walk_minutes
-        lv_str, lv_color = _leave_str_color(leave_in, brd_bright)
-        lv_w = text_pixel_width(font, lv_str)
-
-    if lv_str:
-        # Leave time right-aligned
-        draw.text((x0 + pw - lv_w - 2, y + 1), lv_str, font=font, fill=lv_color)
-        # Dim vertical separator: 1 px line between name area and leave time
-        sep_x = x0 + pw - lv_w - 4
-        draw.line([(sep_x, y + 1), (sep_x, y + layout.HEADER_H - 2)], fill=layout.DIM)
-
-    # Stop name — scrolls if it overflows the available space
-    name_max_w = pw - 5 - (lv_w + 6 if lv_str else 2)
     draw_text_clipped(
         image=image,
-        xy=(x0 + 5, y + 1),
+        xy=(x0 + 5, y),  # y+0: top-aligned so full 8 px row is used
         text=stop.name.upper(),
         font=font,
         color=stop_color,
-        max_width=max(1, name_max_w),
-        row_h=layout.HEADER_H - 1,
+        max_width=pw - 7,  # leave a 2 px right margin
+        row_h=layout.HEADER_H,
         scroll_offset=scroll_offset,
         pause_frames=80,
         end_pause_frames=40,
@@ -116,9 +81,16 @@ def _draw_stop_panel(
 
     y += layout.HEADER_H
 
+    # Filter to only reachable departures (dep.minutes >= walk time).
+    # If walk_minutes not yet known, show all (fallback for startup).
+    if stop.walk_minutes is not None:
+        deps_shown = [d for d in deps if d.minutes >= stop.walk_minutes]
+    else:
+        deps_shown = deps
+
     # ── Departure rows ─────────────────────────────────────────────────────────
     shown = 0
-    for dep in deps[:n_rows]:
+    for dep in deps_shown[:n_rows]:
         if y >= y0 + layout.STOP_H:
             break
 
@@ -157,14 +129,14 @@ def _draw_stop_panel(
                 font=font,
                 color=layout.DIM,
                 max_width=hs_max_w,
-                row_h=layout.ROW_H,
+                row_h=layout.ROW_H + 2,  # +2 to fully capture font descenders
                 scroll_offset=scroll_offset,
             )
 
         y += layout.ROW_H
         shown += 1
 
-    # "No service" placeholder when stop has no predictions
+    # "No service" when stop has no predictions or all are unreachable
     if shown == 0:
         draw.text((x0 + 5, y + 1), "No service", font=font, fill=layout.DIM)
 

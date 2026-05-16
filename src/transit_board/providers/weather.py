@@ -48,6 +48,43 @@ def _wmo_label(code: int) -> str:
     return "Clear"
 
 
+# 3-char abbreviated labels (fit in the narrow icon sub-label area)
+_WMO_SHORT: dict[int, str] = {
+    0: "CLR",
+    1: "CLR",
+    2: "PRT",
+    3: "CLD",
+    45: "FOG",
+    48: "FOG",
+    51: "DRZ",
+    53: "DRZ",
+    55: "DRZ",
+    61: "RAN",
+    63: "RAN",
+    65: "RAN",
+    71: "SNW",
+    73: "SNW",
+    75: "SNW",
+    77: "SNW",
+    80: "SHR",
+    81: "SHR",
+    82: "SHR",
+    85: "SNW",
+    86: "SNW",
+    95: "STM",
+    96: "STM",
+    99: "STM",
+}
+
+
+def _wmo_short(code: int) -> str:
+    """Return 3-char abbreviated label for WMO weather code."""
+    for c in sorted(_WMO_SHORT.keys(), reverse=True):
+        if code >= c:
+            return _WMO_SHORT[c]
+    return "CLR"
+
+
 @dataclass
 class WeatherData:
     temperature_c: float
@@ -67,6 +104,14 @@ class WeatherData:
     @property
     def forecast_label(self) -> str:
         return _wmo_label(self.forecast_weather_code)
+
+    @property
+    def short_label(self) -> str:
+        return _wmo_short(self.weather_code)
+
+    @property
+    def forecast_short_label(self) -> str:
+        return _wmo_short(self.forecast_weather_code)
 
 
 class WeatherClient:

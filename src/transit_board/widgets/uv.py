@@ -50,13 +50,13 @@ def draw_uv(
         uv_max = weather.uv_index_max
         label = f"UV {uv:.0f}"
         color = _uv_color(uv)
-        max_label = f"\u2191{uv_max:.0f}"  # ↑ + today's max
+        max_label = f"^{uv_max:.0f}"  # ^ + today's max (ASCII, avoids tofu on bitmap fonts)
         max_color = _uv_color(uv_max)
     else:
         uv = 0.0
         uv_max = 0.0
         label = "UV --"
-        max_label = "\u2191 --"
+        max_label = "^ --"
         color = layout.DIM
         max_color = layout.DIM
 
@@ -74,7 +74,7 @@ def draw_uv(
 
     # Colour-scale progress bar (2 px tall, near bottom of section)
     bar_max = w - 4  # 28 px usable
-    bar_w = max(1, int(min(uv / _UV_MAX, 1.0) * bar_max)) if weather else 0
+    bar_w = int(min(uv / _UV_MAX, 1.0) * bar_max) if weather else 0  # 0 when UV=0, no stray pixel
     bar_y = y0 + layout.INFO_H - 5
     if bar_w > 0:
         draw.rectangle(

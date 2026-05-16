@@ -255,19 +255,15 @@ def draw_weather(
             fill=layout.SECTION_DIV,
         )
 
-        # Sub-labels under icons (size 7)
-        for label_txt, half_x, half_w in (("NOW", wx0, 19), ("DAY", wx0 + 20, 20)):
-            bbox = draw.textbbox((0, 0), label_txt, font=font_sm)
+        # Condition abbreviations under each icon (NOW=current, DAY=today's forecast)
+        for cond_txt, half_x, half_w in (
+            (weather.short_label, wx0, 19),
+            (weather.forecast_short_label, wx0 + 20, 20),
+        ):
+            bbox = draw.textbbox((0, 0), cond_txt, font=font_sm)
             lw = bbox[2] - bbox[0]
             draw.text(
-                (half_x + (half_w - lw) // 2, y0 + 11), label_txt, font=font_sm, fill=layout.DIM
+                (half_x + (half_w - lw) // 2, y0 + 11), cond_txt, font=font_sm, fill=layout.TEAL
             )
-
-        # Current condition label centred across full width at bottom
-        label = weather.label
-        bbox = draw.textbbox((0, 0), label, font=font)
-        lw = bbox[2] - bbox[0]
-        lx = wx0 + max(0, (ww - lw) // 2)
-        draw.text((lx, y0 + 21), label, font=font, fill=layout.TEAL)
     else:
         draw.text((wx0 + 12, y0 + 11), "---", font=font, fill=layout.DIM)

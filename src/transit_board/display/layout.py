@@ -77,7 +77,7 @@ SECTION_DIV = (18, 18, 28)  # secondary info-strip dividers
 
 # ── Route type → default text colour ──────────────────────────────────────────
 ROUTE_COLORS: dict[str, tuple[int, int, int]] = {
-    "bus": TEAL,
+    "bus": YELLOW,
     "subway": ORANGE,
     "default": WHITE,
 }

@@ -88,14 +88,22 @@ def draw_text_clipped(
     else:
         visual_offset = overflow
 
-    # Render text onto a surface wide enough and crop the visible window
+    # Measure actual text bounding box to correctly anchor the crop window.
+    # Many Pillow fonts render with a positive top offset (bb[1] > 0), meaning
+    # the glyph body starts below y=0.  Cropping from crop_y ensures we always
+    # capture the visible text body rather than blank space above it.
+    _tmp = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    bb = _tmp.textbbox((0, 0), text, font=font)
+    crop_y = max(0, bb[1])  # skip blank rows above glyph body
+    surf_h = max(row_h, bb[3]) + 2  # surface tall enough for full glyph
+
     surf_w = tw + 4
-    surf = Image.new("RGB", (surf_w, row_h), (0, 0, 0))
+    surf = Image.new("RGB", (surf_w, surf_h), (0, 0, 0))
     surf_draw = ImageDraw.Draw(surf)
     surf_draw.text((0, 0), text, font=font, fill=color)
 
     visual_offset = max(0, min(visual_offset, surf_w - max_width))
-    clip = surf.crop((visual_offset, 0, visual_offset + max_width, row_h))
+    clip = surf.crop((visual_offset, crop_y, visual_offset + max_width, crop_y + row_h))
     image.paste(clip, (xy[0], xy[1]))
 
 
