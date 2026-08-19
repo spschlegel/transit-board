@@ -88,22 +88,21 @@ def draw_text_clipped(
     else:
         visual_offset = overflow
 
-    # Measure actual text bounding box to correctly anchor the crop window.
-    # Many Pillow fonts render with a positive top offset (bb[1] > 0), meaning
-    # the glyph body starts below y=0.  Cropping from crop_y ensures we always
-    # capture the visible text body rather than blank space above it.
-    _tmp = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    bb = _tmp.textbbox((0, 0), text, font=font)
-    crop_y = max(0, bb[1])  # skip blank rows above glyph body
-    surf_h = max(row_h, bb[3]) + 2  # surface tall enough for full glyph
-
+    # Render onto a surface tall enough to hold the full glyph (including
+    # descenders), but always crop starting at y=0 so the scrolling path
+    # lands on exactly the same row as the direct draw.text() call above.
+    # (A previous version cropped from the glyph's measured top, which made
+    # scrolling text render 1-2px higher than static text at the same xy —
+    # visible as misaligned headers when one stop's name scrolled and the
+    # other's didn't.)
     surf_w = tw + 4
+    surf_h = row_h + 4
     surf = Image.new("RGB", (surf_w, surf_h), (0, 0, 0))
     surf_draw = ImageDraw.Draw(surf)
     surf_draw.text((0, 0), text, font=font, fill=color)
 
     visual_offset = max(0, min(visual_offset, surf_w - max_width))
-    clip = surf.crop((visual_offset, crop_y, visual_offset + max_width, crop_y + row_h))
+    clip = surf.crop((visual_offset, 0, visual_offset + max_width, row_h))
     image.paste(clip, (xy[0], xy[1]))
 
 
@@ -115,24 +114,20 @@ def draw_chip(
     fg_color: tuple[int, int, int],
     font: ImageFont.ImageFont,
     pad_x: int = 3,
-    chip_h: int = 6,
 ) -> int:
     """
-    Draw a coloured route "chip" (pill with tinted background) at (x, y).
+    Draw a coloured route label at (x, y), padded *pad_x* pixels on each side.
 
-    The chip is *chip_h* pixels tall and wide enough to hold *text* with
-    *pad_x* pixels of horizontal padding on each side.
+    No background fill — a tinted box behind small route text made it harder
+    to read on the LED panel, so colour now comes from the text alone.
 
-    Returns the chip pixel width so the caller can position the next element.
+    Returns the pixel width (including padding) so the caller can position
+    the next element.
     """
     tw = text_pixel_width(font, text)
     chip_w = tw + pad_x * 2
 
-    # Background: ~20 % brightness of the fg colour
-    bg = tuple(max(0, int(c * 0.20)) for c in fg_color)
-
     draw = ImageDraw.Draw(image)
-    draw.rectangle([x, y, x + chip_w - 1, y + chip_h - 1], fill=bg)
     draw.text((x + pad_x, y), text, font=font, fill=fg_color)
 
     return chip_w

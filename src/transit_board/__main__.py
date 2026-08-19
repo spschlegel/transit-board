@@ -62,7 +62,10 @@ def main() -> None:
 
     try:
         matrix = MatrixDisplay(
-            dev=args.dev, brightness=cfg.display.brightness, rotation=cfg.display.rotation
+            dev=args.dev,
+            brightness=cfg.display.brightness,
+            rotation=cfg.display.rotation,
+            y_offset=cfg.display.y_offset,
         )
     except RuntimeError as exc:
         log.error("%s", exc)

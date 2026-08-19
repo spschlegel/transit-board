@@ -72,7 +72,7 @@ def _draw_stop_panel(
         font=font,
         color=stop_color,
         max_width=pw - 7,  # leave a 2 px right margin
-        row_h=layout.HEADER_H,
+        row_h=layout.HEADER_H + 1,  # +1 headroom so scrolled text isn't clipped vs static text
         scroll_offset=scroll_offset,
         pause_frames=80,
         end_pause_frames=40,
@@ -97,10 +97,8 @@ def _draw_stop_panel(
         route_color = _route_color(dep.route, stop.type)
         route_text = dep.route[:4]  # trim to fit tight chip space
 
-        # Route chip (pad_x=1 to save horizontal room in 64 px panel)
-        chip_w = draw_chip(
-            image, x0 + 1, y + 1, route_text, route_color, font_chip, pad_x=1, chip_h=6
-        )
+        # Route label (pad_x=1 to save horizontal room in 64 px panel)
+        chip_w = draw_chip(image, x0 + 1, y + 1, route_text, route_color, font_chip, pad_x=1)
 
         # Departure minutes (right-aligned, urgency-coloured)
         min_label = _minutes_label(dep.minutes)

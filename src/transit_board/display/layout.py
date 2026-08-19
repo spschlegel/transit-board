@@ -62,14 +62,14 @@ INFO_DIV_XS: tuple[int, ...] = (34, 56, 96)  # x positions of vertical info-stri
 # ── Colours (R, G, B) ─────────────────────────────────────────────────────────
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
-DIM = (85, 85, 85)
+DIM = WHITE  # grey was unreadable on LED panels — alias kept so old references stay white
 ORANGE = (255, 115, 0)
-RED = (230, 30, 30)
-GREEN = (30, 225, 30)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
 TEAL = (0, 215, 225)
 YELLOW = (255, 215, 0)
-BLUE = (70, 130, 255)
-PURPLE = (185, 45, 235)
+BLUE = (0, 90, 255)
+PURPLE = (170, 0, 255)
 
 SIDEBAR_BG = (0, 0, 20)  # header / info strip background tint
 PANEL_DIVIDER = (35, 35, 45)  # main structural divider lines
@@ -92,7 +92,7 @@ LINE_COLORS: dict[str, tuple[int, int, int]] = {
     "gl": GREEN,
     "blue": BLUE,
     "bl": BLUE,
-    "silver": DIM,
-    "sl": DIM,
+    "silver": WHITE,
+    "sl": WHITE,
     "purple": PURPLE,
 }

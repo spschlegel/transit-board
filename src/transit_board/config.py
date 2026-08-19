@@ -26,6 +26,7 @@ class DisplayConfig:
     brightness: int = 50
     departures_per_stop: int = 3
     rotation: int = 0  # 0 or 180 — set to 180 if the panel is mounted upside down
+    y_offset: int = 2  # px to shift the whole frame down (content sits tight against top edge)
 
 
 @dataclass
@@ -91,6 +92,7 @@ def load(path: Path = _DEFAULT_CONFIG) -> Config:
         brightness=int(disp_raw.get("brightness", 50)),
         departures_per_stop=int(disp_raw.get("departures_per_stop", 3)),
         rotation=rotation,
+        y_offset=int(disp_raw.get("y_offset", 2)),
     )
 
     ref_raw = raw.get("refresh", {})
