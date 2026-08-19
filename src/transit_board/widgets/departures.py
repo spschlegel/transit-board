@@ -25,6 +25,17 @@ def _route_color(route: str, stop_type: str) -> tuple[int, int, int]:
     return layout.ROUTE_COLORS.get(stop_type, layout.WHITE)
 
 
+def _stop_color(stop: StopConfig) -> tuple[int, int, int]:
+    """Header colour: match a named MBTA line in the stop name (e.g. 'Red',
+    'Orange') so subway headers show the real line colour instead of a
+    generic subway/bus colour; falls back to the type-based colour."""
+    lower = stop.name.lower()
+    for name, color in layout.LINE_COLORS.items():
+        if name in lower:
+            return color
+    return layout.ROUTE_COLORS.get(stop.type, layout.WHITE)
+
+
 def _minutes_color(minutes: int, realtime: bool) -> tuple[int, int, int]:
     if not realtime:
         return layout.DIM
@@ -57,7 +68,7 @@ def _draw_stop_panel(
     y0: int,
 ) -> None:
     draw = ImageDraw.Draw(image)
-    stop_color = layout.ROUTE_COLORS.get(stop.type, layout.WHITE)
+    stop_color = _stop_color(stop)
     pw = layout.STOP_W  # panel width
 
     y = y0
@@ -116,16 +127,18 @@ def _draw_stop_panel(
         if dep.realtime:
             draw.point((x0 + pw - 1, y + 1), fill=layout.GREEN)
 
-        # Headsign (middle, scrolling when too wide)
+        # Headsign (middle, scrolling when too wide). Teal keeps it visually
+        # distinct from the white/urgency-coloured minutes so the two don't
+        # blend together when the headsign runs right up to the edge.
         hs_x = x0 + 1 + chip_w + 2
-        hs_max_w = min_x - hs_x - 2
+        hs_max_w = min_x - hs_x - 3
         if hs_max_w > 0 and dep.headsign:
             draw_text_clipped(
                 image=image,
                 xy=(hs_x, y + 1),
                 text=dep.headsign,
                 font=font,
-                color=layout.DIM,
+                color=layout.TEAL,
                 max_width=hs_max_w,
                 row_h=layout.ROW_H + 2,  # +2 to fully capture font descenders
                 scroll_offset=scroll_offset,
@@ -134,9 +147,16 @@ def _draw_stop_panel(
         y += layout.ROW_H
         shown += 1
 
-    # "No service" when stop has no predictions or all are unreachable
+    # "No service" when stop has no predictions or all are unreachable —
+    # centred in the empty rows rather than pinned to the top.
     if shown == 0:
-        draw.text((x0 + 5, y + 1), "No service", font=font, fill=layout.DIM)
+        msg = "No service"
+        bbox = draw.textbbox((0, 0), msg, font=font)
+        mw = bbox[2] - bbox[0]
+        remaining_h = y0 + layout.STOP_H - y
+        mx = x0 + max(0, (pw - mw) // 2)
+        my = y + max(0, (remaining_h - 8) // 2)
+        draw.text((mx, my), msg, font=font, fill=layout.WHITE)
 
 
 # ── Public draw function ───────────────────────────────────────────────────────
