@@ -21,9 +21,10 @@ _SCALE = 4  # dev-mode window scale factor
 
 
 class MatrixDisplay:
-    def __init__(self, dev: bool = False, brightness: int = 50) -> None:
+    def __init__(self, dev: bool = False, brightness: int = 50, rotation: int = 0) -> None:
         self._dev = dev
         self._brightness = brightness
+        self._rotation = rotation if rotation in (0, 180) else 0
         self._pygame: Optional[object] = None
         self._screen: Optional[object] = None
         self._scale = _SCALE
@@ -104,6 +105,8 @@ class MatrixDisplay:
     def render(self, image: Image.Image) -> None:
         """Push *image* to the display (or dev preview)."""
         img = image.convert("RGB")
+        if self._rotation == 180:
+            img = img.rotate(180)
         if self._dev:
             if self._pygame is not None and self._screen is not None:
                 self._render_pygame(img)

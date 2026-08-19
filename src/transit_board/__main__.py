@@ -61,7 +61,9 @@ def main() -> None:
     from transit_board.loop import run
 
     try:
-        matrix = MatrixDisplay(dev=args.dev, brightness=cfg.display.brightness)
+        matrix = MatrixDisplay(
+            dev=args.dev, brightness=cfg.display.brightness, rotation=cfg.display.rotation
+        )
     except RuntimeError as exc:
         log.error("%s", exc)
         sys.exit(1)

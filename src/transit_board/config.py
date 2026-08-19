@@ -25,6 +25,7 @@ class StopConfig:
 class DisplayConfig:
     brightness: int = 50
     departures_per_stop: int = 3
+    rotation: int = 0  # 0 or 180 — set to 180 if the panel is mounted upside down
 
 
 @dataclass
@@ -79,9 +80,17 @@ def load(path: Path = _DEFAULT_CONFIG) -> Config:
         warnings.warn("No stops configured in config.toml", stacklevel=2)
 
     disp_raw = raw.get("display", {})
+    rotation = int(disp_raw.get("rotation", 0))
+    if rotation not in (0, 180):
+        warnings.warn(
+            f"display.rotation={rotation} not supported (only 0 or 180) — using 0",
+            stacklevel=2,
+        )
+        rotation = 0
     disp = DisplayConfig(
         brightness=int(disp_raw.get("brightness", 50)),
         departures_per_stop=int(disp_raw.get("departures_per_stop", 3)),
+        rotation=rotation,
     )
 
     ref_raw = raw.get("refresh", {})
