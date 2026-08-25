@@ -202,10 +202,6 @@ def _draw_icon(image: Image.Image, ox: int, oy: int, code: int, scale: int = 1) 
             put(x, y, layout.YELLOW if (x, y) in _STORM_LIGHTNING else layout.DIM)
 
 
-_TEMP_SCALE_MIN = -10.0  # °C mapped to an empty bar
-_TEMP_SCALE_MAX = 35.0  # °C mapped to a full bar
-
-
 def _temp_color(temp_c: float) -> tuple[int, int, int]:
     """Rough comfort-scale colour: cold blue → mild green → hot red."""
     if temp_c < 0:
@@ -235,7 +231,8 @@ def draw_weather(
     Render the WEATHER (condition icon + label) and TEMP sections of the info column.
 
     Both are compact single-row designs: this layout gives the clock most of
-    the column's height, so these sections only get 12-14px each.
+    the column's height, so these sections only get 12-14px each. Content in
+    both is centred as a group within the column width.
 
     *show_forecast* is the 22:00-00:01 evening preview window (see loop.py):
     the conditions icon/label switch to tomorrow's forecast. Temperature always
@@ -246,12 +243,12 @@ def draw_weather(
     # Tiny5 only rasterizes cleanly at its native size (8px) and exact
     # multiples (16px, too wide for this 44px column) — anything in between
     # comes out with uneven stroke widths and glyph artifacts, so text stays
-    # at 8px; the colour-scale bar is what gives the temp row visual weight.
+    # at 8px everywhere in this widget.
     font = get_font(font_path, size=8)
     x0 = layout.INFO_X
     w = layout.INFO_W
 
-    # ── Weather section: condition icon (2x scale, left) + short label (right) ──
+    # ── Weather section: condition icon (2x scale) + short label, centred as a group ──
     # In the forecast-preview window, both swap to tomorrow's; the label slot
     # shows "TMRW" instead of the WMO short-code so it's clear at a glance
     # this isn't the current condition (the icon alone reads as "now" otherwise).
@@ -266,19 +263,26 @@ def draw_weather(
 
         icon_scale = 2
         icon_px = 7 * icon_scale  # 14px — exactly fills WEATHER_H
-        icon_x = x0 + 2
+        gap = 3
+        bbox = draw.textbbox((0, 0), cond_txt, font=font)
+        label_w = bbox[2] - bbox[0]
+
+        group_w = icon_px + gap + label_w
+        icon_x = x0 + max(0, (w - group_w) // 2)
         icon_y = wy0 + (layout.WEATHER_H - icon_px) // 2
         _draw_icon(image, icon_x, icon_y, code, scale=icon_scale)
 
-        label_x = icon_x + icon_px + 3
-        bbox = draw.textbbox((0, 0), cond_txt, font=font)
+        label_x = icon_x + icon_px + gap
         lh = bbox[3] - bbox[1]
         label_y = wy0 + (layout.WEATHER_H - lh) // 2 - bbox[1]
         draw.text((label_x, label_y), cond_txt, font=font, fill=layout.TEAL)
     else:
-        draw.text((x0 + 2, wy0 + 3), "---", font=font, fill=layout.DIM)
+        bbox = draw.textbbox((0, 0), "---", font=font)
+        tx = x0 + max(0, (w - (bbox[2] - bbox[0])) // 2)
+        ty = wy0 + (layout.WEATHER_H - (bbox[3] - bbox[1])) // 2 - bbox[1]
+        draw.text((tx, ty), "---", font=font, fill=layout.DIM)
 
-    # ── Temp section: "{current} {^max}" combined on one line + colour bar ──
+    # ── Temp section: "{current} {^max}" combined on one line, centred ──
     ty0 = layout.TEMP_Y
     draw.rectangle(
         [x0, ty0, x0 + w - 1, ty0 + layout.TEMP_H - 1],
@@ -289,19 +293,13 @@ def draw_weather(
         temp_color = _temp_color(weather.temperature_c)
 
         bbox = draw.textbbox((0, 0), temp_str, font=font)
-        tx = x0 + max(0, (w - (bbox[2] - bbox[0])) // 2)
-        draw.text((tx, ty0 + 2), temp_str, font=font, fill=temp_color)
-
-        # Colour-scale temperature bar (2 px tall, near bottom), mirrors the
-        # UV widget's gauge so the two rows read as one visual family.
-        bar_max = w - 4
-        frac = (weather.temperature_c - _TEMP_SCALE_MIN) / (_TEMP_SCALE_MAX - _TEMP_SCALE_MIN)
-        bar_w = int(max(0.0, min(frac, 1.0)) * bar_max)
-        bar_y = ty0 + layout.TEMP_H - 2
-        if bar_w > 0:
-            draw.rectangle(
-                [x0 + 2, bar_y, x0 + 2 + bar_w - 1, bar_y + 1],
-                fill=temp_color,
-            )
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+        tx = x0 + max(0, (w - tw) // 2)
+        ty = ty0 + (layout.TEMP_H - th) // 2 - bbox[1]
+        draw.text((tx, ty), temp_str, font=font, fill=temp_color)
     else:
-        draw.text((x0 + 2, ty0 + 2), "--\u00b0C", font=font, fill=layout.DIM)
+        bbox = draw.textbbox((0, 0), "--\u00b0C", font=font)
+        tx = x0 + max(0, (w - (bbox[2] - bbox[0])) // 2)
+        ty = ty0 + (layout.TEMP_H - (bbox[3] - bbox[1])) // 2 - bbox[1]
+        draw.text((tx, ty), "--\u00b0C", font=font, fill=layout.DIM)

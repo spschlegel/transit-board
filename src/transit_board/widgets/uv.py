@@ -1,4 +1,4 @@
-"""Info-column UV-index section: "UV {value} {sub}" + WHO colour-scale progress bar."""
+"""Info-column UV-index section: "UV {value} {sub}", centred."""
 
 from __future__ import annotations
 
@@ -9,8 +9,6 @@ from PIL import Image
 from transit_board.display import layout
 from transit_board.display.renderer import get_draw, get_font
 from transit_board.providers.weather import WeatherData
-
-_UV_MAX = 11.0  # clamp scale
 
 
 def _uv_color(uv: float) -> tuple[int, int, int]:
@@ -33,7 +31,7 @@ def draw_uv(
     show_forecast: bool = False,
 ) -> None:
     """
-    Render the UV section of the info column: one combined line + a colour bar.
+    Render the UV section of the info column: one combined line, centred.
 
     *show_forecast* is the 22:00-00:01 evening preview window (see loop.py):
     there's no "current" UV reading for tomorrow, so the headline switches to
@@ -44,8 +42,7 @@ def draw_uv(
     # Tiny5 only rasterizes cleanly at its native size (8px) and exact
     # multiples (16px, too wide for this 44px column) — anything in between
     # comes out with uneven stroke widths and glyph artifacts, so text stays
-    # at 8px; the colour-scale bar below is what gives this section more
-    # visual weight instead of a bigger point size.
+    # at 8px.
     font = get_font(font_path, size=8)
 
     x0 = layout.INFO_X
@@ -68,23 +65,14 @@ def draw_uv(
         color = _uv_color(headline_uv)
         label = f"UV {headline_uv:.0f} {sub_label}"
     else:
-        headline_uv = 0.0
         label = "UV -- --"
         color = layout.DIM
 
     # Single combined line: current UV + today's max (or tomorrow's forecast
-    # max + "TMRW" in the preview window)
+    # max + "TMRW" in the preview window), centred both ways
     bbox = draw.textbbox((0, 0), label, font=font)
-    tx = x0 + max(0, (w - (bbox[2] - bbox[0])) // 2)
-    draw.text((tx, y0 + 2), label, font=font, fill=color)
-
-    # Colour-scale progress bar (2 px tall, near bottom of section)
-    bar_max = w - 4
-    # 0 when UV=0 avoids a stray 1px bar at the very start of the scale
-    bar_w = int(min(headline_uv / _UV_MAX, 1.0) * bar_max) if weather else 0
-    bar_y = y0 + layout.UV_H - 2
-    if bar_w > 0:
-        draw.rectangle(
-            [x0 + 2, bar_y, x0 + 2 + bar_w - 1, bar_y + 1],
-            fill=color,
-        )
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+    tx = x0 + max(0, (w - tw) // 2)
+    ty = y0 + (layout.UV_H - th) // 2 - bbox[1]
+    draw.text((tx, ty), label, font=font, fill=color)

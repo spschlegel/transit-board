@@ -2,9 +2,9 @@
 Layout constants for the 128×64 display — vertical variant.
 
 Vertical-split layout:
-  Left   84×64  — departures panel, two stops stacked  (x 0–83)
-  x=84           — 1 px vertical divider
-  Right  44×64  — info column: clock / weather / temp / UV, stacked (x 84–127)
+  Left   44×64  — info column: clock / weather / temp / UV, stacked (x 0–43)
+  x=44           — 1 px vertical divider
+  Right  84×64  — departures panel, two stops stacked  (x 44–127)
 
 Departures panel:
   Top    84×32  — stop 1  (y 0–31)
@@ -26,23 +26,9 @@ from __future__ import annotations
 DISPLAY_W = 128
 DISPLAY_H = 64
 
-# ── Departures panel (left ~2/3) ────────────────────────────────────────────────
-DEPARTURES_X = 0
-DEPARTURES_W = 84
-
-STOP_H = 32  # each stop's panel height (header + 3 rows)
-STOP_DIV_Y = 32  # y of 1 px horizontal divider between stop 1 and stop 2
-
-HEADER_H = 8  # stop-name / leave-time header row
-ROW_H = 8  # one departure row
-# HEADER_H + 3 × ROW_H = 32 = STOP_H ✓
-
-# ── Vertical divider between departures and info column (full height) ──────────
-VERT_DIV_X = 84
-
-# ── Info column (right ~1/3, full height) ───────────────────────────────────────
-INFO_X = 84
-INFO_W = 44  # 128 - 84
+# ── Info column (left ~1/3, full height) ───────────────────────────────────────
+INFO_X = 0
+INFO_W = 44
 
 CLOCK_Y = 0
 CLOCK_H = 26
@@ -58,6 +44,20 @@ UV_H = 12
 # CLOCK_H + WEATHER_H + TEMP_H + UV_H = 64 = DISPLAY_H ✓
 
 INFO_DIV_YS: tuple[int, ...] = (26, 40, 52)  # y positions of horizontal info-column dividers
+
+# ── Vertical divider between info column and departures (full height) ──────────
+VERT_DIV_X = 44
+
+# ── Departures panel (right ~2/3) ────────────────────────────────────────────────
+DEPARTURES_X = 44
+DEPARTURES_W = 84
+
+STOP_H = 32  # each stop's panel height (header + 3 rows)
+STOP_DIV_Y = 32  # y of 1 px horizontal divider between stop 1 and stop 2
+
+HEADER_H = 8  # stop-name / leave-time header row
+ROW_H = 8  # one departure row
+# HEADER_H + 3 × ROW_H = 32 = STOP_H ✓
 
 # ── Colours (R, G, B) ─────────────────────────────────────────────────────────
 BLACK = (0, 0, 0)

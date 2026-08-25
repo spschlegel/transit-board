@@ -162,15 +162,15 @@ def draw_chip(
 def draw_panel_chrome(image: Image.Image) -> None:
     """
     Draw structural chrome on top of all widget layers (always drawn last):
-      • Vertical divider at VERT_DIV_X — full height, departures vs. info column
-      • Horizontal stop divider at STOP_DIV_Y — departures column only (x 0..DEPARTURES_W-1)
-      • Horizontal info-column dividers at INFO_DIV_YS — info column only (x INFO_X..DISPLAY_W-1)
+      • Vertical divider at VERT_DIV_X — full height, info column vs. departures
+      • Horizontal stop divider at STOP_DIV_Y — departures column only
+      • Horizontal info-column dividers at INFO_DIV_YS — info column only
     """
     from transit_board.display import layout
 
     draw = ImageDraw.Draw(image)
 
-    # Vertical divider between departures and info column (full height)
+    # Vertical divider between info column and departures (full height)
     draw.line(
         [(layout.VERT_DIV_X, 0), (layout.VERT_DIV_X, layout.DISPLAY_H - 1)],
         fill=layout.PANEL_DIVIDER,
@@ -178,13 +178,16 @@ def draw_panel_chrome(image: Image.Image) -> None:
 
     # Horizontal divider between stop 1 and stop 2 (departures column only)
     draw.line(
-        [(0, layout.STOP_DIV_Y), (layout.DEPARTURES_W - 1, layout.STOP_DIV_Y)],
+        [
+            (layout.DEPARTURES_X, layout.STOP_DIV_Y),
+            (layout.DEPARTURES_X + layout.DEPARTURES_W - 1, layout.STOP_DIV_Y),
+        ],
         fill=layout.PANEL_DIVIDER,
     )
 
     # Horizontal dividers within the info column
     for div_y in layout.INFO_DIV_YS:
         draw.line(
-            [(layout.INFO_X, div_y), (layout.DISPLAY_W - 1, div_y)],
+            [(layout.INFO_X, div_y), (layout.INFO_X + layout.INFO_W - 1, div_y)],
             fill=layout.SECTION_DIV,
         )
