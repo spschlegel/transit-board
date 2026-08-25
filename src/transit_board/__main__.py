@@ -63,7 +63,7 @@ def main() -> None:
     try:
         matrix = MatrixDisplay(
             dev=args.dev,
-            brightness=cfg.display.brightness,
+            brightness=cfg.display.brightness_for(),
             rotation=cfg.display.rotation,
             y_offset=cfg.display.y_offset,
         )

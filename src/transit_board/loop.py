@@ -15,6 +15,8 @@ import logging
 import math
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
+from datetime import time as dtime
 from typing import Optional
 
 from transit_board.config import Config
@@ -32,6 +34,17 @@ log = logging.getLogger(__name__)
 
 FRAME_INTERVAL = 1.0 / 20  # target ~20 FPS
 SCROLL_SPEED = 1  # pixels per frame (scroll advances each rendered frame)
+
+# 22:00 to 00:01 local time: UV + weather-conditions widgets show tomorrow's
+# forecast instead of current/today — more useful once today is basically
+# over. Reverts at 00:01 once "tomorrow" has actually become today.
+_FORECAST_PREVIEW_START = dtime(22, 0)
+_FORECAST_PREVIEW_END = dtime(0, 1)
+
+
+def _forecast_preview_active(now: datetime) -> bool:
+    t = now.time()
+    return t >= _FORECAST_PREVIEW_START or t < _FORECAST_PREVIEW_END
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -110,6 +123,10 @@ async def run(cfg: Config, matrix: MatrixDisplay, dev: bool = False) -> None:
                 )
                 await _refresh_weather(cfg, weather_client, weather_cache, state)
 
+            # ── Brightness schedule (checked ~once/sec, not every frame) ────────
+            if state.tick % 20 == 0:
+                matrix.set_brightness(cfg.display.brightness_for())
+
             # ── Render frame ──────────────────────────────────────────────────
             image, _ = new_canvas(matrix.width, matrix.height)
 
@@ -122,8 +139,11 @@ async def run(cfg: Config, matrix: MatrixDisplay, dev: bool = False) -> None:
                 tick=state.tick,
             )
             clock_widget.draw_clock(image=image)
-            weather_widget.draw_weather(image=image, weather=state.weather, tick=state.tick)
-            uv_widget.draw_uv(image=image, weather=state.weather)
+            show_forecast = _forecast_preview_active(datetime.now())
+            weather_widget.draw_weather(
+                image=image, weather=state.weather, tick=state.tick, show_forecast=show_forecast
+            )
+            uv_widget.draw_uv(image=image, weather=state.weather, show_forecast=show_forecast)
 
             draw_panel_chrome(image)  # divider + section lines on top
             matrix.render(image)

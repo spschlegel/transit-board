@@ -28,10 +28,15 @@ type = "subway"
 # walk_minutes = 12
 
 [display]
-brightness = 50          # 0–100 — panel LED brightness
 departures_per_stop = 3  # rows shown per stop (3 fills the top panel exactly)
 rotation = 0             # 0 or 180 — set to 180 if the panel is mounted upside down
 y_offset = 2             # px to shift the whole frame down (0 to disable)
+
+# Brightness follows a day/night schedule rather than a fixed value.
+brightness_day = 90        # 0–100 — panel brightness from day_start until night_start
+brightness_night = 60      # 0–100 — panel brightness from night_start until day_start
+day_start = 06:30:00       # local time brightness switches to brightness_day
+night_start = 21:00:00     # local time brightness switches to brightness_night
 
 [refresh]
 transit_secs = 30        # how often to re-fetch MBTA predictions (seconds)

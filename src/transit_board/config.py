@@ -6,6 +6,7 @@ import os
 import tomllib
 import warnings
 from dataclasses import dataclass, field
+from datetime import datetime, time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -23,10 +24,23 @@ class StopConfig:
 
 @dataclass
 class DisplayConfig:
-    brightness: int = 50
     departures_per_stop: int = 3
     rotation: int = 0  # 0 or 180 — set to 180 if the panel is mounted upside down
     y_offset: int = 2  # px to shift the whole frame down (content sits tight against top edge)
+
+    # Brightness is scheduled rather than fixed — dimmer at night, brighter during the
+    # day, re-evaluated continuously by loop.py (see DisplayConfig.brightness_for).
+    brightness_day: int = 90
+    brightness_night: int = 60
+    day_start: time = field(default_factory=lambda: time(6, 30))
+    night_start: time = field(default_factory=lambda: time(21, 0))
+
+    def brightness_for(self, now: datetime | None = None) -> int:
+        """Return the scheduled brightness % for *now* (default: current local time)."""
+        t = (now or datetime.now()).time()
+        if self.day_start <= t < self.night_start:
+            return self.brightness_day
+        return self.brightness_night
 
 
 @dataclass
@@ -88,11 +102,15 @@ def load(path: Path = _DEFAULT_CONFIG) -> Config:
             stacklevel=2,
         )
         rotation = 0
+    defaults = DisplayConfig()
     disp = DisplayConfig(
-        brightness=int(disp_raw.get("brightness", 50)),
         departures_per_stop=int(disp_raw.get("departures_per_stop", 3)),
         rotation=rotation,
         y_offset=int(disp_raw.get("y_offset", 2)),
+        brightness_day=int(disp_raw.get("brightness_day", defaults.brightness_day)),
+        brightness_night=int(disp_raw.get("brightness_night", defaults.brightness_night)),
+        day_start=disp_raw.get("day_start", defaults.day_start),
+        night_start=disp_raw.get("night_start", defaults.night_start),
     )
 
     ref_raw = raw.get("refresh", {})
@@ -122,7 +140,7 @@ def dev_default() -> Config:
         ],
         lat=42.3601,
         lon=-71.0589,
-        display=DisplayConfig(brightness=50, departures_per_stop=3),
+        display=DisplayConfig(departures_per_stop=3),
         refresh=RefreshConfig(transit_secs=30, weather_secs=300),
         walk_speed_kmh=5.0,
     )
