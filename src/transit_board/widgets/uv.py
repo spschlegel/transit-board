@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from transit_board.display import layout
-from transit_board.display.renderer import get_font
+from transit_board.display.renderer import get_draw, get_font
 from transit_board.providers.weather import WeatherData
 
 _UV_MAX = 11.0  # clamp scale
@@ -32,7 +32,7 @@ def draw_uv(
     font_path: str | None = None,
 ) -> None:
     """Render UV index into the UV section of the bottom info strip."""
-    draw = ImageDraw.Draw(image)
+    draw = get_draw(image)
     font = get_font(font_path, size=8)
 
     x0 = layout.UV_X

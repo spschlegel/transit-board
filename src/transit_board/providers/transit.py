@@ -33,7 +33,16 @@ class MBTAClient:
         )
 
     async def departures(self, stop_id: str, max_results: int = 3) -> list[Departure]:
-        """Return up to *max_results* upcoming departures for *stop_id*."""
+        """
+        Return upcoming departures for *stop_id*.
+
+        Overfetches (page[limit] = 3x *max_results*, min 9) rather than capping
+        the returned list at *max_results*: callers filter this list by walk-time
+        reachability before taking the soonest *max_results*, so truncating here
+        would silently drop departures a caller could still have used — on
+        frequent subway service this used to filter every fetched departure out
+        as unreachable and show "No service" even when trains were running.
+        """
         try:
             r = await self._http.get(
                 "/predictions",
@@ -89,8 +98,6 @@ class MBTAClient:
                     realtime=realtime,
                 )
             )
-            if len(results) >= max_results:
-                break
 
         return results
 
@@ -114,11 +121,17 @@ class MBTAClient:
 # ---------------------------------------------------------------------------
 
 
-def mock_departures(stop_id: str, stop_type: str, max_results: int = 3) -> list[Departure]:
-    """Return plausible fake departures for --dev mode."""
+def mock_departures(stop_id: str, stop_type: str) -> list[Departure]:
+    """
+    Return plausible fake departures for --dev mode.
+
+    Returns the full pool rather than slicing to *max_results* — callers filter
+    by walk-time reachability before taking the soonest *max_results*, same as
+    the real MBTAClient.departures().
+    """
     if stop_type == "bus":
         # Multiple routes mixed in chronological order — mirrors real multi-route stops
-        pool = [
+        return [
             Departure("39", "Forest Hills", 2, True),
             Departure("66", "Harvard", 5, True),
             Departure("39", "Forest Hills", 13, True),
@@ -126,11 +139,9 @@ def mock_departures(stop_id: str, stop_type: str, max_results: int = 3) -> list[
             Departure("66", "Harvard", 21, True),
             Departure("39", "Forest Hills", 28, False),
         ]
-    else:
-        pool = [
-            Departure("OL", "Oak Grove", 3, True),
-            Departure("OL", "Forest Hills", 7, True),
-            Departure("OL", "Oak Grove", 14, True),
-            Departure("OL", "Forest Hills", 21, False),
-        ]
-    return pool[:max_results]
+    return [
+        Departure("OL", "Oak Grove", 3, True),
+        Departure("OL", "Forest Hills", 7, True),
+        Departure("OL", "Oak Grove", 14, True),
+        Departure("OL", "Forest Hills", 21, False),
+    ]

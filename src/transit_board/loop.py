@@ -92,9 +92,7 @@ async def run(cfg: Config, matrix: MatrixDisplay, dev: bool = False) -> None:
     if dev:
         # Seed with mock data immediately
         for stop in cfg.stops:
-            state.departures_by_stop[stop.id] = mock_departures(
-                stop.id, stop.type, cfg.display.departures_per_stop
-            )
+            state.departures_by_stop[stop.id] = mock_departures(stop.id, stop.type)
         state.weather = mock_weather()
         log.info("Dev mode: loaded mock data for %d stop(s)", len(cfg.stops))
 

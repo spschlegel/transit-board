@@ -11,11 +11,12 @@ Transit panel:
   x=64           — 1 px vertical stop divider
   Right  64×32  — stop 2  (x 64–127)
 
-Info strip columns (vertical dividers drawn at x = 34, 56, 96):
-  Clock    x  0–33   (34 px)
-  Temp     x 34–55   (22 px)
-  Weather  x 56–95   (40 px)
-  UV       x 96–127  (32 px)
+Info strip columns (vertical dividers drawn at x = 32, 64, 96) — four equal
+32 px columns:
+  Clock    x   0–31
+  Temp     x  32–63
+  Weather  x  64–95
+  UV       x  96–127
 """
 
 from __future__ import annotations
@@ -46,18 +47,18 @@ INFO_Y = 33
 INFO_H = 31  # 63 − 33 + 1
 
 CLOCK_X = 0
-CLOCK_W = 34
+CLOCK_W = 32
 
-TEMP_X = 34
-TEMP_W = 22
+TEMP_X = 32
+TEMP_W = 32
 
-WEATHER_X = 56
-WEATHER_W = 40
+WEATHER_X = 64
+WEATHER_W = 32
 
 UV_X = 96
 UV_W = 32
 
-INFO_DIV_XS: tuple[int, ...] = (34, 56, 96)  # x positions of vertical info-strip dividers
+INFO_DIV_XS: tuple[int, ...] = (32, 64, 96)  # x positions of vertical info-strip dividers
 
 # ── Colours (R, G, B) ─────────────────────────────────────────────────────────
 BLACK = (0, 0, 0)
