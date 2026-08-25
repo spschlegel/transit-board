@@ -58,21 +58,32 @@ def draw_uv(
     if weather is not None:
         if show_forecast:
             headline_uv = weather.uv_index_max_tomorrow
-            sub_label = "TMRW"
+            sub_str = " TMRW"
+            # TMRW in teal ties it visually to the weather widget's forecast
+            # label instead of reading as just a dimmer version of the number.
+            sub_color = layout.TEAL
         else:
             headline_uv = weather.uv_index
-            sub_label = f"^{weather.uv_index_max:.0f}"  # ^ + today's max
-        color = _uv_color(headline_uv)
-        label = f"UV {headline_uv:.0f} {sub_label}"
+            sub_str = f" ^{weather.uv_index_max:.0f}"  # ^ + today's max
+            sub_color = layout.DIM
+        main_str = f"UV {headline_uv:.0f}"
+        main_color = _uv_color(headline_uv)
     else:
-        label = "UV -- --"
-        color = layout.DIM
+        main_str = "UV --"
+        sub_str = " --"
+        main_color = layout.DIM
+        sub_color = layout.DIM
 
-    # Single combined line: current UV + today's max (or tomorrow's forecast
-    # max + "TMRW" in the preview window), centred both ways
-    bbox = draw.textbbox((0, 0), label, font=font)
-    tw = bbox[2] - bbox[0]
-    th = bbox[3] - bbox[1]
-    tx = x0 + max(0, (w - tw) // 2)
-    ty = y0 + (layout.UV_H - th) // 2 - bbox[1]
-    draw.text((tx, ty), label, font=font, fill=color)
+    # Two colours in one line: the current/forecast UV reading keeps the WHO
+    # severity colour, the trailing max/"TMRW" is dimmed (or tealed in the
+    # forecast window) so the two don't read as one undifferentiated value.
+    main_bbox = draw.textbbox((0, 0), main_str, font=font)
+    sub_bbox = draw.textbbox((0, 0), sub_str, font=font)
+    main_w = main_bbox[2] - main_bbox[0]
+    total_w = main_w + (sub_bbox[2] - sub_bbox[0])
+    th = main_bbox[3] - main_bbox[1]
+
+    tx = x0 + max(0, (w - total_w) // 2)
+    ty = y0 + (layout.UV_H - th) // 2 - main_bbox[1]
+    draw.text((tx, ty), main_str, font=font, fill=main_color)
+    draw.text((tx + main_w, ty), sub_str, font=font, fill=sub_color)

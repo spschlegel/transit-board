@@ -159,11 +159,13 @@ def draw_chip(
     return chip_w
 
 
-def draw_panel_chrome(image: Image.Image) -> None:
+def draw_panel_chrome(image: Image.Image, departures_per_stop: int = 3) -> None:
     """
     Draw structural chrome on top of all widget layers (always drawn last):
       • Vertical divider at VERT_DIV_X — full height, info column vs. departures
-      • Horizontal stop divider at STOP_DIV_Y — departures column only
+      • Horizontal stop divider — departures column only, position depends on
+        *departures_per_stop* (must match what draw_departures() was called
+        with — see layout.stop_panel_layout())
       • Horizontal info-column dividers at INFO_DIV_YS — info column only
     """
     from transit_board.display import layout
@@ -177,10 +179,12 @@ def draw_panel_chrome(image: Image.Image) -> None:
     )
 
     # Horizontal divider between stop 1 and stop 2 (departures column only)
+    top_margin, panel_h = layout.stop_panel_layout(departures_per_stop)
+    stop_div_y = top_margin + panel_h
     draw.line(
         [
-            (layout.DEPARTURES_X, layout.STOP_DIV_Y),
-            (layout.DEPARTURES_X + layout.DEPARTURES_W - 1, layout.STOP_DIV_Y),
+            (layout.DEPARTURES_X, stop_div_y),
+            (layout.DEPARTURES_X + layout.DEPARTURES_W - 1, stop_div_y),
         ],
         fill=layout.PANEL_DIVIDER,
     )

@@ -1,4 +1,4 @@
-"""Transit panel widget: two stops stacked vertically, each DEPARTURES_W×32 px."""
+"""Transit panel widget: two stops stacked vertically, centred in the column."""
 
 from __future__ import annotations
 
@@ -67,6 +67,7 @@ def _draw_stop_panel(
     font_chip: object,
     x0: int,
     y0: int,
+    panel_h: int,
 ) -> None:
     draw = get_draw(image)
     stop_color = _stop_color(stop)
@@ -101,9 +102,20 @@ def _draw_stop_panel(
         deps_shown = deps
 
     # ── Departure rows ─────────────────────────────────────────────────────────
+    # Centred in the space below the header rather than stacked flush under
+    # it: with fewer than n_rows departures, a full bottom-anchor pushed the
+    # rows down enough to open a large gap under the header, which read as
+    # "too far up"/oddly spaced. Splitting the leftover space keeps a little
+    # air on both sides instead of dumping it all on one edge.
+    deps_to_show = deps_shown[:n_rows]
+    if deps_to_show:
+        available_h = y0 + panel_h - y
+        leftover = available_h - len(deps_to_show) * layout.ROW_H
+        y += max(0, leftover) // 2
+
     shown = 0
-    for dep in deps_shown[:n_rows]:
-        if y >= y0 + layout.STOP_H:
+    for dep in deps_to_show:
+        if y >= y0 + panel_h:
             break
 
         route_color = _route_color(dep.route, stop.type)
@@ -159,7 +171,7 @@ def _draw_stop_panel(
         msg = "No service"
         bbox = draw.textbbox((0, 0), msg, font=font)
         mw = bbox[2] - bbox[0]
-        remaining_h = y0 + layout.STOP_H - y
+        remaining_h = y0 + panel_h - y
         mx = x0 + max(0, (pw - mw) // 2)
         my = y + max(0, (remaining_h - 8) // 2)
         draw.text((mx, my), msg, font=font, fill=layout.WHITE)
@@ -178,21 +190,27 @@ def draw_departures(
     font_path: str | None = None,
 ) -> None:
     """
-    Render the departures panel into the left DEPARTURES_W×128 px region of *image*.
+    Render the departures panel into the right DEPARTURES_W×128 px region of *image*.
 
-    Up to 2 stops are drawn stacked vertically, each in a DEPARTURES_W×32 px row:
-      • 8 px header: coloured accent bar + stop name + 'when to leave' label
-      • 3 × 8 px departure rows: route chip / scrolling headsign / minutes + dot
+    Up to 2 stops are drawn stacked vertically, each an 8px header plus
+    departures_per_stop × 8px rows (route chip / scrolling headsign / minutes
+    + dot). The pair is vertically centred in the full column — see
+    layout.stop_panel_layout() — rather than assumed to fill it exactly, so
+    running with fewer than 3 rows per stop opens real margin around the
+    block instead of leaving it stranded as padding inside each stop.
 
-    All bus lines at a stop are included; the 3 soonest are shown regardless of route.
+    All bus lines at a stop are included; the soonest departures_per_stop are
+    shown regardless of route.
     """
     font = get_font(font_path, size=8)
     font_chip = get_font(font_path, size=7)
     brd_bright = (tick // 15) % 2 == 0
 
+    top_margin, panel_h = layout.stop_panel_layout(departures_per_stop)
+
     for i, stop in enumerate(stops[:2]):
         x0 = layout.DEPARTURES_X
-        y0 = i * layout.STOP_H
+        y0 = top_margin + i * panel_h
         deps = departures_by_stop.get(stop.id, [])
         _draw_stop_panel(
             image,
@@ -205,4 +223,5 @@ def draw_departures(
             font_chip,
             x0,
             y0,
+            panel_h,
         )

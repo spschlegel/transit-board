@@ -145,7 +145,9 @@ async def run(cfg: Config, matrix: MatrixDisplay, dev: bool = False) -> None:
             )
             uv_widget.draw_uv(image=image, weather=state.weather, show_forecast=show_forecast)
 
-            draw_panel_chrome(image)  # divider + section lines on top
+            draw_panel_chrome(  # divider + section lines on top
+                image, departures_per_stop=cfg.display.departures_per_stop
+            )
             matrix.render(image)
 
             # ── Advance scroll ────────────────────────────────────────────────

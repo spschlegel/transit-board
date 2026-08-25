@@ -248,7 +248,7 @@ def draw_weather(
     x0 = layout.INFO_X
     w = layout.INFO_W
 
-    # ── Weather section: condition icon (2x scale) + short label, centred as a group ──
+    # ── Weather section: condition icon + short label, centred as a group ──
     # In the forecast-preview window, both swap to tomorrow's; the label slot
     # shows "TMRW" instead of the WMO short-code so it's clear at a glance
     # this isn't the current condition (the icon alone reads as "now" otherwise).
@@ -261,8 +261,8 @@ def draw_weather(
         code = weather.weather_code_tomorrow if show_forecast else weather.weather_code
         cond_txt = "TMRW" if show_forecast else weather.short_label
 
-        icon_scale = 2
-        icon_px = 7 * icon_scale  # 14px — exactly fills WEATHER_H
+        icon_scale = 1
+        icon_px = 7 * icon_scale  # 7px, fits the 10px-tall WEATHER_H with room to spare
         gap = 3
         bbox = draw.textbbox((0, 0), cond_txt, font=font)
         label_w = bbox[2] - bbox[0]
@@ -289,15 +289,22 @@ def draw_weather(
         fill=layout.SIDEBAR_BG,
     )
     if weather is not None:
-        temp_str = f"{weather.temperature_c:.0f}\u00b0C ^{weather.temperature_max_c:.0f}\u00b0"
+        cur_str = f"{weather.temperature_c:.0f}\u00b0C"
+        max_str = f" ^{weather.temperature_max_c:.0f}\u00b0"
         temp_color = _temp_color(weather.temperature_c)
 
-        bbox = draw.textbbox((0, 0), temp_str, font=font)
-        tw = bbox[2] - bbox[0]
-        th = bbox[3] - bbox[1]
-        tx = x0 + max(0, (w - tw) // 2)
-        ty = ty0 + (layout.TEMP_H - th) // 2 - bbox[1]
-        draw.text((tx, ty), temp_str, font=font, fill=temp_color)
+        cur_bbox = draw.textbbox((0, 0), cur_str, font=font)
+        max_bbox = draw.textbbox((0, 0), max_str, font=font)
+        cur_w = cur_bbox[2] - cur_bbox[0]
+        total_w = cur_w + (max_bbox[2] - max_bbox[0])
+        th = cur_bbox[3] - cur_bbox[1]
+
+        tx = x0 + max(0, (w - total_w) // 2)
+        ty = ty0 + (layout.TEMP_H - th) // 2 - cur_bbox[1]
+        # Current temp keeps the comfort-scale colour; the secondary max
+        # reading is dimmed so the two don't read as one undifferentiated value.
+        draw.text((tx, ty), cur_str, font=font, fill=temp_color)
+        draw.text((tx + cur_w, ty), max_str, font=font, fill=layout.DIM)
     else:
         bbox = draw.textbbox((0, 0), "--\u00b0C", font=font)
         tx = x0 + max(0, (w - (bbox[2] - bbox[0])) // 2)
