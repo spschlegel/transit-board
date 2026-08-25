@@ -1,4 +1,4 @@
-"""Transit panel widget: two stops side-by-side, each 64×32 px."""
+"""Transit panel widget: two stops stacked vertically, each DEPARTURES_W×32 px."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ def _draw_stop_panel(
 ) -> None:
     draw = get_draw(image)
     stop_color = _stop_color(stop)
-    pw = layout.STOP_W  # panel width
+    pw = layout.DEPARTURES_W  # panel width
 
     y = y0
 
@@ -178,9 +178,9 @@ def draw_departures(
     font_path: str | None = None,
 ) -> None:
     """
-    Render the transit panel into the top 128×32 px region of *image*.
+    Render the departures panel into the left DEPARTURES_W×128 px region of *image*.
 
-    Up to 2 stops are drawn side-by-side, each in a 64×32 px column:
+    Up to 2 stops are drawn stacked vertically, each in a DEPARTURES_W×32 px row:
       • 8 px header: coloured accent bar + stop name + 'when to leave' label
       • 3 × 8 px departure rows: route chip / scrolling headsign / minutes + dot
 
@@ -191,8 +191,8 @@ def draw_departures(
     brd_bright = (tick // 15) % 2 == 0
 
     for i, stop in enumerate(stops[:2]):
-        x0 = i * layout.STOP_W
-        y0 = layout.TRANSIT_Y
+        x0 = layout.DEPARTURES_X
+        y0 = i * layout.STOP_H
         deps = departures_by_stop.get(stop.id, [])
         _draw_stop_panel(
             image,

@@ -1,23 +1,23 @@
 """
-Layout constants for the 128×64 display.
+Layout constants for the 128×64 display — vertical variant.
 
-Horizontal-split layout:
-  Top    128×32  — transit panel, two stops side-by-side  (y 0–31)
-  y=32           — 1 px horizontal divider
-  Bottom 128×31  — info strip: clock / temp / weather / UV  (y 33–63)
+Vertical-split layout:
+  Left   84×64  — departures panel, two stops stacked  (x 0–83)
+  x=84           — 1 px vertical divider
+  Right  44×64  — info column: clock / weather / temp / UV, stacked (x 84–127)
 
-Transit panel:
-  Left   64×32  — stop 1  (x 0–63)
-  x=64           — 1 px vertical stop divider
-  Right  64×32  — stop 2  (x 64–127)
+Departures panel:
+  Top    84×32  — stop 1  (y 0–31)
+  y=32           — 1 px horizontal stop divider
+  Bottom 84×32  — stop 2  (y 32–63)
 
-Info strip columns (vertical dividers drawn at x = 40, 68, 96):
-  Clock    x   0–39  (40 px — wide enough for the time at Tiny5's clean 16px
-                       size; Tiny5 only rasterizes cleanly at 8px and exact
-                       multiples, and "23:45" needs 36px at size 16)
-  Temp     x  40–67  (28 px)
-  Weather  x  68–95  (28 px)
-  UV       x  96–127 (32 px)
+Info column (horizontal dividers at y = 26, 40, 52) — clock gets the largest
+share since a bigger clock is the whole point of this layout, the rest are
+compact single-row designs:
+  Clock    y  0–25  (26 px)
+  Weather  y 26–39  (14 px)
+  Temp     y 40–51  (12 px)
+  UV       y 52–63  (12 px)
 """
 
 from __future__ import annotations
@@ -26,40 +26,38 @@ from __future__ import annotations
 DISPLAY_W = 128
 DISPLAY_H = 64
 
-# ── Transit panel (top 32 px) ──────────────────────────────────────────────────
-TRANSIT_Y = 0
-TRANSIT_H = 32
+# ── Departures panel (left ~2/3) ────────────────────────────────────────────────
+DEPARTURES_X = 0
+DEPARTURES_W = 84
 
-STOP_W = 64  # each stop occupies half the width
-STOP_H = 32  # and the full transit panel height
+STOP_H = 32  # each stop's panel height (header + 3 rows)
+STOP_DIV_Y = 32  # y of 1 px horizontal divider between stop 1 and stop 2
 
-STOP_DIV_X = 64  # x of 1 px vertical divider between stops
-
-# ── Row heights within each stop panel ────────────────────────────────────────
 HEADER_H = 8  # stop-name / leave-time header row
 ROW_H = 8  # one departure row
 # HEADER_H + 3 × ROW_H = 32 = STOP_H ✓
 
-# ── Horizontal divider between transit and info strip ─────────────────────────
-HORIZ_DIV_Y = 32  # y of the 1 px separator line
+# ── Vertical divider between departures and info column (full height) ──────────
+VERT_DIV_X = 84
 
-# ── Info strip (y 33–63 = 31 px tall) ─────────────────────────────────────────
-INFO_Y = 33
-INFO_H = 31  # 63 − 33 + 1
+# ── Info column (right ~1/3, full height) ───────────────────────────────────────
+INFO_X = 84
+INFO_W = 44  # 128 - 84
 
-CLOCK_X = 0
-CLOCK_W = 40
+CLOCK_Y = 0
+CLOCK_H = 26
 
-TEMP_X = 40
-TEMP_W = 28
+WEATHER_Y = 26
+WEATHER_H = 14
 
-WEATHER_X = 68
-WEATHER_W = 28
+TEMP_Y = 40
+TEMP_H = 12
 
-UV_X = 96
-UV_W = 32
+UV_Y = 52
+UV_H = 12
+# CLOCK_H + WEATHER_H + TEMP_H + UV_H = 64 = DISPLAY_H ✓
 
-INFO_DIV_XS: tuple[int, ...] = (40, 68, 96)  # x positions of vertical info-strip dividers
+INFO_DIV_YS: tuple[int, ...] = (26, 40, 52)  # y positions of horizontal info-column dividers
 
 # ── Colours (R, G, B) ─────────────────────────────────────────────────────────
 BLACK = (0, 0, 0)
@@ -75,7 +73,7 @@ PURPLE = (170, 0, 255)
 
 SIDEBAR_BG = (0, 0, 20)  # header / info strip background tint
 PANEL_DIVIDER = (35, 35, 45)  # main structural divider lines
-SECTION_DIV = (18, 18, 28)  # secondary info-strip dividers
+SECTION_DIV = (18, 18, 28)  # secondary info-column dividers
 
 # ── Route type → default text colour ──────────────────────────────────────────
 ROUTE_COLORS: dict[str, tuple[int, int, int]] = {
