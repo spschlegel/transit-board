@@ -109,12 +109,9 @@ def _draw_stop_panel(
         route_color = _route_color(dep.route, stop.type)
         route_text = dep.route[:4]  # trim to fit tight chip space
 
-        # Text baseline sits 1px *above* the row top: the bundled font's glyph
-        # ink (ascent 9 / descent 2 at size 8) is taller than an 8px ROW_H, so
-        # anchoring at row top + 1 (as a shorter font could) pushed the bottom
-        # 2px of ink past the row into the next row — invisible for rows 1-2
-        # (bleeds into blank space) but visibly clipped on the last row, whose
-        # overflow lands past STOP_H and gets painted over by the info strip.
+        # Text baseline sits 1px *above* the row top so the font's glyph ink
+        # (drawn at relative rows 2-7 at size 8) is centred with even padding
+        # inside the 8px ROW_H instead of pushed toward the bottom edge.
         text_y = y - 1
 
         # Route label (pad_x=1 to save horizontal room in 64 px panel)

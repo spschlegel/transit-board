@@ -7,11 +7,14 @@ from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
-# Bundled pixel font (Silkscreen, SIL OFL) — designed to rasterize pixel-perfect
-# at 8px, unlike Pillow's built-in default font which is unreadable at panel
-# sizes (5/6 collide) and only available as an antialiased outline font.
+# Bundled pixel font (Tiny5, SIL OFL) — a thin monospace-ish pixel font whose
+# glyph ink fits inside an 8px row at size 8 (ascent 7 / descent 2, drawn at
+# rows 2-7) with no vertical clipping or offset tricks needed. Unlike Pillow's
+# built-in default font (unreadable at panel sizes — 5/6 collide, antialiased)
+# or Silkscreen (legible but its 11px line height overflowed the 8px row grid
+# and looked chunkier than needed at this size).
 _FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
-_DEFAULT_FONT_PATH = str(_FONT_DIR / "Silkscreen-Regular.ttf")
+_DEFAULT_FONT_PATH = str(_FONT_DIR / "Tiny5-Regular.ttf")
 
 # Font cache keyed by (path_or_None, size)
 _font_cache: dict[tuple[Optional[str], int], ImageFont.ImageFont] = {}
