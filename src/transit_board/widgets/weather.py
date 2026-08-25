@@ -7,7 +7,7 @@ from typing import Optional
 from PIL import Image, ImageDraw
 
 from transit_board.display import layout
-from transit_board.display.renderer import get_font
+from transit_board.display.renderer import get_draw, get_font
 from transit_board.providers.weather import WeatherData
 
 # ── 7×7 pixel-art weather icons ──────────────────────────────────────────────
@@ -162,44 +162,66 @@ _STORM: list[tuple[int, int]] = [
 ]
 
 
-def _draw_icon(image: Image.Image, ox: int, oy: int, code: int) -> None:
-    """Render a 7×7 weather icon with top-left at (ox, oy)."""
+def _draw_icon(image: Image.Image, ox: int, oy: int, code: int, scale: int = 1) -> None:
+    """Render a 7×7 weather icon with top-left at (ox, oy), each pixel *scale* px wide."""
     draw = ImageDraw.Draw(image)
+
+    def put(x: int, y: int, color: tuple[int, int, int]) -> None:
+        px, py = ox + x * scale, oy + y * scale
+        if scale == 1:
+            draw.point((px, py), fill=color)
+        else:
+            draw.rectangle([px, py, px + scale - 1, py + scale - 1], fill=color)
 
     if code <= 1:  # Clear
         for x, y in _SUN:
-            draw.point((ox + x, oy + y), fill=layout.YELLOW)
+            put(x, y, layout.YELLOW)
 
     elif code <= 2:  # Partly cloudy — two colours
         for x, y in _PARTLY:
-            color = layout.YELLOW if (x, y) in _PARTLY_SUN else layout.WHITE
-            draw.point((ox + x, oy + y), fill=color)
+            put(x, y, layout.YELLOW if (x, y) in _PARTLY_SUN else layout.WHITE)
 
     elif code <= 3:  # Overcast
         for x, y in _CLOUD:
-            draw.point((ox + x, oy + y), fill=layout.DIM)
+            put(x, y, layout.DIM)
 
     elif code < 70:  # Rain / drizzle
         for x, y in _RAIN:
-            color = layout.BLUE if y >= 5 else layout.TEAL
-            draw.point((ox + x, oy + y), fill=color)
+            put(x, y, layout.BLUE if y >= 5 else layout.TEAL)
 
     elif code < 80:  # Snow
         for x, y in _SNOW:
-            draw.point((ox + x, oy + y), fill=layout.WHITE)
+            put(x, y, layout.WHITE)
 
     elif code < 90:  # Rain showers
         for x, y in _RAIN:
-            color = layout.BLUE if y >= 5 else layout.WHITE
-            draw.point((ox + x, oy + y), fill=color)
+            put(x, y, layout.BLUE if y >= 5 else layout.WHITE)
 
     else:  # Thunderstorm
         for x, y in _STORM:
-            color = layout.YELLOW if (x, y) in _STORM_LIGHTNING else layout.DIM
-            draw.point((ox + x, oy + y), fill=color)
+            put(x, y, layout.YELLOW if (x, y) in _STORM_LIGHTNING else layout.DIM)
 
 
-# ── Public draw function ──────────────────────────────────────────────────────
+_TEMP_SCALE_MIN = -10.0  # °C mapped to an empty bar
+_TEMP_SCALE_MAX = 35.0  # °C mapped to a full bar
+
+
+def _temp_color(temp_c: float) -> tuple[int, int, int]:
+    """Rough comfort-scale colour: cold blue → mild green → hot red."""
+    if temp_c < 0:
+        return layout.BLUE
+    if temp_c < 10:
+        return layout.TEAL
+    if temp_c < 21:
+        return layout.GREEN
+    if temp_c < 27:
+        return layout.YELLOW
+    if temp_c < 32:
+        return (255, 140, 0)  # amber
+    return layout.RED
+
+
+# ── Public draw function ───────────────────────────────────────────────
 
 
 def draw_weather(
@@ -207,63 +229,88 @@ def draw_weather(
     weather: Optional[WeatherData],
     tick: int = 0,
     font_path: str | None = None,
+    show_forecast: bool = False,
 ) -> None:
-    """Render temperature (TEMP section) and icon+label (WEATHER section) in info strip."""
-    draw = ImageDraw.Draw(image)
-    font = get_font(font_path, size=8)
-    font_sm = get_font(font_path, size=7)
+    """
+    Render temperature (TEMP section) and icon+label (WEATHER section) in info strip.
 
-    # ── Temperature section ─────────────────────────────────────────────────────
+    *show_forecast* is the 22:00-00:01 evening preview window (see loop.py):
+    the conditions icon/label switch to tomorrow's forecast. Temperature always
+    shows current + today's max regardless — a future day's temperature isn't
+    "current" in any sense, so there's nothing useful to preview there.
+    """
+    draw = get_draw(image)
+    # Tiny5 only rasterizes cleanly at its native size (8px) and exact
+    # multiples (16px, too wide for these 32px columns) — anything in
+    # between comes out with uneven stroke widths and glyph artifacts, so
+    # text stays at 8px everywhere; the colour-scale bars below are what give
+    # these sections more visual weight instead of a bigger point size.
+    font = get_font(font_path, size=8)
+
+    # ── Temperature section: current (line 1) + today's max (line 2) ─────
+    # Mirrors the UV widget's current/max + colour-scale-bar layout.
     tx0 = layout.TEMP_X
+    tcol_w = layout.TEMP_W
+    ty0 = layout.INFO_Y
     draw.rectangle(
-        [tx0, layout.INFO_Y, tx0 + layout.TEMP_W - 1, layout.INFO_Y + layout.INFO_H - 1],
+        [tx0, ty0, tx0 + tcol_w - 1, ty0 + layout.INFO_H - 1],
         fill=layout.SIDEBAR_BG,
     )
     if weather is not None:
-        temp_str = f"{weather.temperature_c:.0f}\u00b0C"  # °C
-        bbox = draw.textbbox((0, 0), temp_str, font=font)
-        tw = bbox[2] - bbox[0]
-        tx = tx0 + max(0, (layout.TEMP_W - tw) // 2)
-        draw.text((tx, layout.INFO_Y + 11), temp_str, font=font, fill=layout.YELLOW)
-    else:
-        draw.text((tx0 + 2, layout.INFO_Y + 11), "--\u00b0C", font=font, fill=layout.DIM)
+        temp_str = f"{weather.temperature_c:.0f}\u00b0C"
+        max_str = f"^{weather.temperature_max_c:.0f}\u00b0"
+        temp_color = _temp_color(weather.temperature_c)
 
-    # ── Weather section: current icon (left) + forecast icon (right) ───────────────────
-    # Layout (40 px wide, 31 px tall):
-    #   Left 19 px  — current icon + "NOW" label
-    #   1 px sep at wx0+19
-    #   Right 20 px — forecast icon + "DAY" label
-    #   Bottom row: current condition label, full width
+        bbox = draw.textbbox((0, 0), temp_str, font=font)
+        tx = tx0 + max(0, (tcol_w - (bbox[2] - bbox[0])) // 2)
+        draw.text((tx, ty0 + 4), temp_str, font=font, fill=temp_color)
+
+        bbox = draw.textbbox((0, 0), max_str, font=font)
+        mx = tx0 + max(0, (tcol_w - (bbox[2] - bbox[0])) // 2)
+        draw.text((mx, ty0 + 15), max_str, font=font, fill=layout.DIM)
+
+        # Colour-scale temperature bar (2 px tall, near bottom), mirrors the
+        # UV widget's gauge so the two columns read as one visual family.
+        bar_max = tcol_w - 4
+        frac = (weather.temperature_c - _TEMP_SCALE_MIN) / (_TEMP_SCALE_MAX - _TEMP_SCALE_MIN)
+        bar_w = int(max(0.0, min(frac, 1.0)) * bar_max)
+        bar_y = ty0 + layout.INFO_H - 5
+        if bar_w > 0:
+            draw.rectangle(
+                [tx0 + 2, bar_y, tx0 + 2 + bar_w - 1, bar_y + 1],
+                fill=temp_color,
+            )
+    else:
+        draw.text((tx0 + 2, ty0 + 4), "--\u00b0C", font=font, fill=layout.DIM)
+
+    # ── Weather section: condition icon (2x scale) + short label ─────
+    # In the forecast-preview window, both swap to tomorrow's; the label slot
+    # shows "TMRW" instead of the WMO short-code so it's clear at a glance
+    # this isn't the current condition (the icon alone reads as "now" otherwise).
     wx0 = layout.WEATHER_X
-    ww = layout.WEATHER_W  # 40
+    ww = layout.WEATHER_W
     y0 = layout.INFO_Y
     draw.rectangle(
         [wx0, y0, wx0 + ww - 1, y0 + layout.INFO_H - 1],
         fill=layout.SIDEBAR_BG,
     )
     if weather is not None:
-        # Icons at top of section
-        left_icon_x = wx0 + (19 - 7) // 2  # centred in left 19 px
-        right_icon_x = wx0 + 20 + (20 - 7) // 2  # centred in right 20 px
+        code = weather.weather_code_tomorrow if show_forecast else weather.weather_code
+        cond_txt = "TMRW" if show_forecast else weather.short_label
+
+        icon_scale = 2
+        icon_px = 7 * icon_scale
+        icon_x = wx0 + (ww - icon_px) // 2
         icon_y = y0 + 2
-        _draw_icon(image, left_icon_x, icon_y, weather.weather_code)
-        _draw_icon(image, right_icon_x, icon_y, weather.forecast_weather_code)
+        _draw_icon(image, icon_x, icon_y, code, scale=icon_scale)
 
-        # Thin vertical separator between the two halves
-        draw.line(
-            [(wx0 + 19, y0 + 2), (wx0 + 19, y0 + 18)],
-            fill=layout.SECTION_DIV,
+        bbox = draw.textbbox((0, 0), cond_txt, font=font)
+        lw = bbox[2] - bbox[0]
+        draw.text(
+            (wx0 + max(0, (ww - lw) // 2), icon_y + icon_px + 2),
+            cond_txt,
+            font=font,
+            fill=layout.TEAL,
         )
-
-        # Condition abbreviations under each icon (NOW=current, DAY=today's forecast)
-        for cond_txt, half_x, half_w in (
-            (weather.short_label, wx0, 19),
-            (weather.forecast_short_label, wx0 + 20, 20),
-        ):
-            bbox = draw.textbbox((0, 0), cond_txt, font=font_sm)
-            lw = bbox[2] - bbox[0]
-            draw.text(
-                (half_x + (half_w - lw) // 2, y0 + 11), cond_txt, font=font_sm, fill=layout.TEAL
-            )
     else:
-        draw.text((wx0 + 12, y0 + 11), "---", font=font, fill=layout.DIM)
+        draw.text((wx0 + 8, y0 + 11), "---", font=font, fill=layout.DIM)

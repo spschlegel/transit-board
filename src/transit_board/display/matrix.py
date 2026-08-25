@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 log = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class MatrixDisplay:
         opts.parallel = 1
         opts.hardware_mapping = "adafruit-hat-pwm"  # requires GPIO4→GPIO18 bridge
         opts.brightness = max(0, min(100, brightness))
-        opts.gpio_slowdown = 4  # recommended for Pi 4
+        opts.gpio_slowdown = 5  # recommended for Pi 4
         opts.drop_privileges = False  # dropping mid-run breaks venv imports for subsequent modules
         opts.disable_hardware_pulsing = False
 
@@ -107,11 +107,31 @@ class MatrixDisplay:
     def height(self) -> int:
         return self._height
 
+    # ── Brightness ───────────────────────────────────────────────────────────
+
+    def set_brightness(self, brightness: int) -> None:
+        """
+        Update panel brightness at runtime (0-100), e.g. for a day/night schedule.
+
+        On real hardware this maps directly to the matrix's PWM brightness
+        (takes effect on the next SwapOnVSync, no reinit needed). In dev mode
+        there's no PWM to drive, so render() scales the preview image instead —
+        that also makes the schedule visible when eyeballing --dev.
+        """
+        brightness = max(0, min(100, brightness))
+        if brightness == self._brightness:
+            return
+        self._brightness = brightness
+        if not self._dev:
+            self._matrix.brightness = brightness
+
     # ── Rendering ─────────────────────────────────────────────────────────────
 
     def render(self, image: Image.Image) -> None:
         """Push *image* to the display (or dev preview)."""
         img = image.convert("RGB")
+        if self._dev and self._brightness < 100:
+            img = ImageEnhance.Brightness(img).enhance(self._brightness / 100.0)
         if self._rotation == 180:
             img = img.rotate(180)
         if self._y_offset:

@@ -7,6 +7,15 @@ from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
+# Bundled pixel font (Tiny5, SIL OFL) — a thin monospace-ish pixel font whose
+# glyph ink fits inside an 8px row at size 8 (ascent 7 / descent 2, drawn at
+# rows 2-7) with no vertical clipping or offset tricks needed. Unlike Pillow's
+# built-in default font (unreadable at panel sizes — 5/6 collide, antialiased)
+# or Silkscreen (legible but its 11px line height overflowed the 8px row grid
+# and looked chunkier than needed at this size).
+_FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+_DEFAULT_FONT_PATH = str(_FONT_DIR / "Tiny5-Regular.ttf")
+
 # Font cache keyed by (path_or_None, size)
 _font_cache: dict[tuple[Optional[str], int], ImageFont.ImageFont] = {}
 
@@ -16,12 +25,14 @@ def get_font(path: Optional[str] = None, size: int = 8) -> ImageFont.ImageFont:
     Return a cached Pillow font.
 
     If *path* points to an existing TTF/OTF file it is loaded at *size* pt.
-    Falls back to Pillow's built-in default font (requires Pillow >= 10.0).
+    Falls back to the bundled Silkscreen pixel font, then to Pillow's built-in
+    default font if that's somehow missing.
     """
+    path = path or _DEFAULT_FONT_PATH
     key = (path, size)
     if key not in _font_cache:
         font: ImageFont.ImageFont
-        if path and Path(path).exists():
+        if Path(path).exists():
             try:
                 font = ImageFont.truetype(path, size)
             except Exception:
@@ -32,10 +43,25 @@ def get_font(path: Optional[str] = None, size: int = 8) -> ImageFont.ImageFont:
     return _font_cache[key]
 
 
+def get_draw(image: Image.Image) -> ImageDraw.ImageDraw:
+    """
+    Return an ImageDraw context configured for crisp, fully-lit LED text.
+
+    fontmode="1" disables FreeType antialiasing so every glyph pixel is drawn
+    either fully on or fully off — an antialiased edge pixel renders as a dim,
+    partial-brightness grey on the physical panel instead of a clean line.
+    Non-text drawing (rectangles, lines, points) is unaffected by fontmode, so
+    this is a drop-in replacement for ImageDraw.Draw(image) everywhere.
+    """
+    draw = ImageDraw.Draw(image)
+    draw.fontmode = "1"
+    return draw
+
+
 def new_canvas(width: int = 128, height: int = 64) -> tuple[Image.Image, ImageDraw.ImageDraw]:
     """Return a fresh black RGB image and its draw context."""
     img = Image.new("RGB", (width, height), (0, 0, 0))
-    return img, ImageDraw.Draw(img)
+    return img, get_draw(img)
 
 
 def text_pixel_width(font: ImageFont.ImageFont, text: str) -> int:
@@ -72,7 +98,7 @@ def draw_text_clipped(
     tw = text_pixel_width(font, text)
 
     if tw <= max_width:
-        draw = ImageDraw.Draw(image)
+        draw = get_draw(image)
         draw.text(xy, text, font=font, fill=color)
         return
 
@@ -98,7 +124,7 @@ def draw_text_clipped(
     surf_w = tw + 4
     surf_h = row_h + 4
     surf = Image.new("RGB", (surf_w, surf_h), (0, 0, 0))
-    surf_draw = ImageDraw.Draw(surf)
+    surf_draw = get_draw(surf)
     surf_draw.text((0, 0), text, font=font, fill=color)
 
     visual_offset = max(0, min(visual_offset, surf_w - max_width))
@@ -127,7 +153,7 @@ def draw_chip(
     tw = text_pixel_width(font, text)
     chip_w = tw + pad_x * 2
 
-    draw = ImageDraw.Draw(image)
+    draw = get_draw(image)
     draw.text((x + pad_x, y), text, font=font, fill=fg_color)
 
     return chip_w

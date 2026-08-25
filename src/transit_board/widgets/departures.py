@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from transit_board.config import StopConfig
 from transit_board.display import layout
 from transit_board.display.renderer import (
     draw_chip,
     draw_text_clipped,
+    get_draw,
     get_font,
     text_pixel_width,
 )
@@ -67,7 +68,7 @@ def _draw_stop_panel(
     x0: int,
     y0: int,
 ) -> None:
-    draw = ImageDraw.Draw(image)
+    draw = get_draw(image)
     stop_color = _stop_color(stop)
     pw = layout.STOP_W  # panel width
 
@@ -108,8 +109,13 @@ def _draw_stop_panel(
         route_color = _route_color(dep.route, stop.type)
         route_text = dep.route[:4]  # trim to fit tight chip space
 
+        # Text baseline sits 1px *above* the row top so the font's glyph ink
+        # (drawn at relative rows 2-7 at size 8) is centred with even padding
+        # inside the 8px ROW_H instead of pushed toward the bottom edge.
+        text_y = y - 1
+
         # Route label (pad_x=1 to save horizontal room in 64 px panel)
-        chip_w = draw_chip(image, x0 + 1, y + 1, route_text, route_color, font_chip, pad_x=1)
+        chip_w = draw_chip(image, x0 + 1, text_y, route_text, route_color, font_chip, pad_x=1)
 
         # Departure minutes (right-aligned, urgency-coloured)
         min_label = _minutes_label(dep.minutes)
@@ -121,7 +127,7 @@ def _draw_stop_panel(
         min_w = text_pixel_width(font, min_label)
         # 2 px gap + 1 px realtime dot at far right
         min_x = x0 + pw - min_w - 3
-        draw.text((min_x, y + 1), min_label, font=font, fill=min_color)
+        draw.text((min_x, text_y), min_label, font=font, fill=min_color)
 
         # Realtime dot (top-right corner of row)
         if dep.realtime:
@@ -135,7 +141,7 @@ def _draw_stop_panel(
         if hs_max_w > 0 and dep.headsign:
             draw_text_clipped(
                 image=image,
-                xy=(hs_x, y + 1),
+                xy=(hs_x, text_y),
                 text=dep.headsign,
                 font=font,
                 color=layout.TEAL,

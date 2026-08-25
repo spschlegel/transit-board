@@ -91,7 +91,9 @@ class WeatherData:
     weather_code: int
     uv_index: float
     uv_index_max: float = 0.0  # today's daily UV maximum
-    forecast_weather_code: int = 0  # today's overall forecast WMO code
+    temperature_max_c: float = 0.0  # today's daily temperature maximum
+    uv_index_max_tomorrow: float = 0.0  # tomorrow's daily UV maximum
+    weather_code_tomorrow: int = 0  # tomorrow's overall forecast WMO code
 
     @property
     def temperature_f(self) -> float:
@@ -102,16 +104,12 @@ class WeatherData:
         return _wmo_label(self.weather_code)
 
     @property
-    def forecast_label(self) -> str:
-        return _wmo_label(self.forecast_weather_code)
-
-    @property
     def short_label(self) -> str:
         return _wmo_short(self.weather_code)
 
     @property
-    def forecast_short_label(self) -> str:
-        return _wmo_short(self.forecast_weather_code)
+    def short_label_tomorrow(self) -> str:
+        return _wmo_short(self.weather_code_tomorrow)
 
 
 class WeatherClient:
@@ -128,10 +126,12 @@ class WeatherClient:
                     "latitude": self._lat,
                     "longitude": self._lon,
                     "current": "temperature_2m,weather_code,uv_index",
-                    "daily": "weather_code,uv_index_max",
+                    "daily": "uv_index_max,temperature_2m_max,weather_code",
                     "temperature_unit": "celsius",
                     "timezone": "auto",
-                    "forecast_days": 1,
+                    # 2 days: index 0 = today (also used for the evening
+                    # forecast-preview window, see loop.py), index 1 = tomorrow.
+                    "forecast_days": 2,
                 },
             )
             r.raise_for_status()
@@ -142,14 +142,17 @@ class WeatherClient:
         body = r.json()
         cur = body["current"]
         daily = body.get("daily", {})
-        daily_codes = daily.get("weather_code", [])
         daily_uv_max = daily.get("uv_index_max", [])
+        daily_temp_max = daily.get("temperature_2m_max", [])
+        daily_codes = daily.get("weather_code", [])
         return WeatherData(
             temperature_c=float(cur["temperature_2m"]),
             weather_code=int(cur["weather_code"]),
             uv_index=float(cur.get("uv_index", 0.0)),
             uv_index_max=float(daily_uv_max[0]) if daily_uv_max else 0.0,
-            forecast_weather_code=int(daily_codes[0]) if daily_codes else 0,
+            temperature_max_c=float(daily_temp_max[0]) if daily_temp_max else 0.0,
+            uv_index_max_tomorrow=float(daily_uv_max[1]) if len(daily_uv_max) > 1 else 0.0,
+            weather_code_tomorrow=int(daily_codes[1]) if len(daily_codes) > 1 else 0,
         )
 
     async def aclose(self) -> None:
@@ -163,5 +166,7 @@ def mock_weather() -> WeatherData:
         weather_code=1,
         uv_index=4.5,
         uv_index_max=7.0,
-        forecast_weather_code=3,  # Cloudy (for visible contrast in dev)
+        temperature_max_c=26.0,
+        uv_index_max_tomorrow=9.0,
+        weather_code_tomorrow=61,  # Rain (for visible contrast against today's Clear)
     )
