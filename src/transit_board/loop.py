@@ -153,10 +153,17 @@ async def run(cfg: Config, matrix: MatrixDisplay, dev: bool = False) -> None:
             state.tick += 1
 
             # ── Frame pacing ──────────────────────────────────────────────────
+            # Always await something, even when a frame overruns FRAME_INTERVAL
+            # (sleep <= 0): asyncio can only deliver a cancellation at an await
+            # suspension point, and the only other awaits in this loop are the
+            # transit/weather refreshes, gated behind TTL caches that might not
+            # expire for another 30s+. Without this, a slow render (e.g. real
+            # hardware SwapOnVSync taking longer than 50ms at higher
+            # gpio_slowdown) starves Ctrl-C/SIGTERM of any chance to land,
+            # making shutdown feel like it hangs.
             elapsed = time.monotonic() - t0
             sleep = FRAME_INTERVAL - elapsed
-            if sleep > 0:
-                await asyncio.sleep(sleep)
+            await asyncio.sleep(max(sleep, 0))
 
     except asyncio.CancelledError:
         log.info("Loop cancelled — cleaning up")
