@@ -87,7 +87,7 @@ class MatrixDisplay:
         opts.parallel = 1
         opts.hardware_mapping = "adafruit-hat-pwm"  # requires GPIO4→GPIO18 bridge
         opts.brightness = max(0, min(100, brightness))
-        opts.gpio_slowdown = 4  # recommended for Pi 4
+        opts.gpio_slowdown = 5  # recommended for Pi 4
         opts.drop_privileges = False  # dropping mid-run breaks venv imports for subsequent modules
         opts.disable_hardware_pulsing = False
 

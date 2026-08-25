@@ -16,11 +16,11 @@ def draw_clock(image: Image.Image, font_path: str | None = None) -> None:
     now = datetime.now()
 
     # Tiny5 only rasterizes cleanly at its native size (8px) and exact
-    # multiples (16px) — any size in between comes out with uneven stroke
-    # widths and glyph artifacts (confirmed by inspection), and 16px is too
-    # wide for CLOCK_W (32px). So both lines stay at the native size; the
-    # time gets more visual weight from vertical spacing instead.
-    font_time = get_font(font_path, size=8)
+    # multiples (16px) — anything in between comes out with uneven stroke
+    # widths and glyph artifacts (confirmed by inspection). CLOCK_W (40px) is
+    # sized specifically to fit the time at 16px ("23:45" is 36px there); the
+    # date stays at the native 8px.
+    font_time = get_font(font_path, size=16)
     font_date = get_font(font_path, size=8)
 
     x0 = layout.CLOCK_X
@@ -38,7 +38,7 @@ def draw_clock(image: Image.Image, font_path: str | None = None) -> None:
     bbox = draw.textbbox((0, 0), time_str, font=font_time)
     tw = bbox[2] - bbox[0]
     tx = x0 + max(0, (w - tw) // 2)
-    draw.text((tx, y0 + 6), time_str, font=font_time, fill=layout.WHITE)
+    draw.text((tx, y0 + 2), time_str, font=font_time, fill=layout.WHITE)
 
     # Date — "Fri 09", dimmer, centred below time
     date_str = now.strftime("%a %d")

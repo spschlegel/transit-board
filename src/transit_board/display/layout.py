@@ -11,12 +11,13 @@ Transit panel:
   x=64           — 1 px vertical stop divider
   Right  64×32  — stop 2  (x 64–127)
 
-Info strip columns (vertical dividers drawn at x = 32, 64, 96) — four equal
-32 px columns:
-  Clock    x   0–31
-  Temp     x  32–63
-  Weather  x  64–95
-  UV       x  96–127
+Info strip columns (vertical dividers drawn at x = 40, 68, 96):
+  Clock    x   0–39  (40 px — wide enough for the time at Tiny5's clean 16px
+                       size; Tiny5 only rasterizes cleanly at 8px and exact
+                       multiples, and "23:45" needs 36px at size 16)
+  Temp     x  40–67  (28 px)
+  Weather  x  68–95  (28 px)
+  UV       x  96–127 (32 px)
 """
 
 from __future__ import annotations
@@ -47,18 +48,18 @@ INFO_Y = 33
 INFO_H = 31  # 63 − 33 + 1
 
 CLOCK_X = 0
-CLOCK_W = 32
+CLOCK_W = 40
 
-TEMP_X = 32
-TEMP_W = 32
+TEMP_X = 40
+TEMP_W = 28
 
-WEATHER_X = 64
-WEATHER_W = 32
+WEATHER_X = 68
+WEATHER_W = 28
 
 UV_X = 96
 UV_W = 32
 
-INFO_DIV_XS: tuple[int, ...] = (32, 64, 96)  # x positions of vertical info-strip dividers
+INFO_DIV_XS: tuple[int, ...] = (40, 68, 96)  # x positions of vertical info-strip dividers
 
 # ── Colours (R, G, B) ─────────────────────────────────────────────────────────
 BLACK = (0, 0, 0)
