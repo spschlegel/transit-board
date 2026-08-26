@@ -93,7 +93,6 @@ YELLOW = (255, 215, 0)
 BLUE = (0, 90, 255)
 PURPLE = (170, 0, 255)
 
-SIDEBAR_BG = (0, 0, 20)  # header / info strip background tint
 PANEL_DIVIDER = (35, 35, 45)  # main structural divider lines
 SECTION_DIV = (18, 18, 28)  # secondary info-column dividers
 

@@ -253,10 +253,6 @@ def draw_weather(
     # shows "TMRW" instead of the WMO short-code so it's clear at a glance
     # this isn't the current condition (the icon alone reads as "now" otherwise).
     wy0 = layout.WEATHER_Y
-    draw.rectangle(
-        [x0, wy0, x0 + w - 1, wy0 + layout.WEATHER_H - 1],
-        fill=layout.SIDEBAR_BG,
-    )
     if weather is not None:
         code = weather.weather_code_tomorrow if show_forecast else weather.weather_code
         cond_txt = "TMRW" if show_forecast else weather.short_label
@@ -284,10 +280,6 @@ def draw_weather(
 
     # ── Temp section: "{current} {^max}" combined on one line, centred ──
     ty0 = layout.TEMP_Y
-    draw.rectangle(
-        [x0, ty0, x0 + w - 1, ty0 + layout.TEMP_H - 1],
-        fill=layout.SIDEBAR_BG,
-    )
     if weather is not None:
         cur_str = f"{weather.temperature_c:.0f}\u00b0C"
         max_str = f" ^{weather.temperature_max_c:.0f}\u00b0"

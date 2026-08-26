@@ -49,12 +49,6 @@ def draw_uv(
     w = layout.INFO_W
     y0 = layout.UV_Y
 
-    # Background
-    draw.rectangle(
-        [x0, y0, x0 + w - 1, y0 + layout.UV_H - 1],
-        fill=layout.SIDEBAR_BG,
-    )
-
     if weather is not None:
         if show_forecast:
             headline_uv = weather.uv_index_max_tomorrow

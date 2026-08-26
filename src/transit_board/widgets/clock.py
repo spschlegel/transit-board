@@ -27,12 +27,6 @@ def draw_clock(image: Image.Image, font_path: str | None = None) -> None:
     w = layout.INFO_W
     y0 = layout.CLOCK_Y
 
-    # Background
-    draw.rectangle(
-        [x0, y0, x0 + w - 1, y0 + layout.CLOCK_H - 1],
-        fill=layout.SIDEBAR_BG,
-    )
-
     # Time — HH:MM, horizontally centred
     time_str = now.strftime("%H:%M")
     bbox = draw.textbbox((0, 0), time_str, font=font_time)

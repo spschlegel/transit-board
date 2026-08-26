@@ -76,7 +76,6 @@ def _draw_stop_panel(
     y = y0
 
     # ── Header: accent bar + scrolling stop name (full width) ───────────────────────
-    draw.rectangle([x0, y, x0 + pw - 1, y + layout.HEADER_H - 1], fill=layout.SIDEBAR_BG)
     draw.rectangle([x0, y, x0 + 2, y + layout.HEADER_H - 1], fill=stop_color)
     draw_text_clipped(
         image=image,
