@@ -68,6 +68,7 @@ def _draw_stop_panel(
     x0: int,
     y0: int,
     panel_h: int,
+    header_gap: int,
 ) -> None:
     draw = get_draw(image)
     stop_color = _stop_color(stop)
@@ -91,7 +92,7 @@ def _draw_stop_panel(
         scroll_speed_inv=3,
     )
 
-    y += layout.HEADER_H
+    y += layout.HEADER_H + header_gap
 
     # Filter to only reachable departures (dep.minutes >= walk time).
     # If walk_minutes not yet known, show all (fallback for startup).
@@ -205,7 +206,7 @@ def draw_departures(
     font_chip = get_font(font_path, size=7)
     brd_bright = (tick // 15) % 2 == 0
 
-    top_margin, panel_h = layout.stop_panel_layout(departures_per_stop)
+    top_margin, panel_h, header_gap = layout.stop_panel_layout(departures_per_stop)
 
     for i, stop in enumerate(stops[:2]):
         x0 = layout.DEPARTURES_X
@@ -223,4 +224,5 @@ def draw_departures(
             x0,
             y0,
             panel_h,
+            header_gap,
         )

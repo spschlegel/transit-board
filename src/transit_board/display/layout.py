@@ -14,10 +14,11 @@ of that gap; longer ones (already handled fine) just scroll a bit more often.
 Departures panel: each stop's panel height is HEADER_H + departures_per_stop
 × ROW_H, not a fixed constant — someone running with departures_per_stop=2
 has 8px less content per stop than the 3-row default, and that's real spare
-canvas, not something to leave stranded as centred padding inside each stop's
-own block. stop_panel_layout() centres the whole two-stop block (both panels
-+ the divider between them) vertically in the full 64px column instead, so
-that slack becomes a top/bottom margin around the pair — see stop_panel_layout().
+canvas rather than something to leave stranded. stop_panel_layout() splits
+that slack two ways: up to 4px becomes a gap between the header and the
+first row (so the header doesn't sit flush against its data), and whatever's
+left becomes a top/bottom margin around the whole two-stop block. See
+stop_panel_layout().
 
 Info column (horizontal dividers at y = 30, 40, 52) — clock gets the largest
 share since a bigger clock is the whole point of this layout, the rest are
@@ -65,20 +66,30 @@ HEADER_H = 8  # stop-name / leave-time header row
 ROW_H = 8  # one departure row
 
 
-def stop_panel_layout(n_rows: int) -> tuple[int, int]:
-    """
-    Return (top_margin, panel_h) for the two stacked stop panels.
+_MAX_HEADER_GAP = 4  # px, cap on the gap carved out between header and first row
 
-    panel_h is each stop's height (header + n_rows departure rows). The pair
-    (2 × panel_h) is centred within the full DISPLAY_H rather than assumed to
-    fill it exactly — at the default n_rows=3 it does fill it (32px × 2 = 64,
-    top_margin=0), but any other row count leaves real slack that's better
-    spent as a margin around the block than as internal padding nobody asked
-    for. The stop-to-stop divider sits at `top_margin + panel_h`.
+
+def stop_panel_layout(n_rows: int) -> tuple[int, int, int]:
     """
-    panel_h = HEADER_H + n_rows * ROW_H
+    Return (top_margin, panel_h, header_gap) for the two stacked stop panels.
+
+    At the default n_rows=3, header + 3 rows already fills the full 64px
+    column between the two stops (32px × 2), so there's no slack to spend and
+    this returns (0, 32, 0) — same as ever, no regression there.
+
+    With fewer rows configured there's real slack, and it used to all go to
+    a top/bottom margin around the pair — which looked wrong two ways at
+    once: the header sat with a lot of empty air above it, and butted
+    straight up against the first row below with none. header_gap claims up
+    to _MAX_HEADER_GAP px of that slack to sit between the header and the
+    first row instead, and only what's left over becomes outer margin.
+    """
+    bare_panel_h = HEADER_H + n_rows * ROW_H
+    slack = DISPLAY_H - 2 * bare_panel_h
+    header_gap = min(_MAX_HEADER_GAP, max(0, slack // 4))
+    panel_h = bare_panel_h + header_gap
     top_margin = max(0, (DISPLAY_H - 2 * panel_h) // 2)
-    return top_margin, panel_h
+    return top_margin, panel_h, header_gap
 
 
 # ── Colours (R, G, B) ─────────────────────────────────────────────────────────

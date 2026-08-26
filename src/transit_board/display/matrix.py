@@ -86,7 +86,14 @@ class MatrixDisplay:
         opts.chain_length = 2  # two panels chained → 128 wide
         opts.parallel = 1
         opts.hardware_mapping = "adafruit-hat-pwm"  # requires GPIO4→GPIO18 bridge
-        opts.brightness = max(0, min(100, brightness))
+        # Always 100 here — dimming is done in render() by scaling pixel values
+        # instead (see set_brightness()). The library's own PWM brightness
+        # control keeps the blue channel disproportionately bright at reduced
+        # levels (observed on hardware: whites/yellows/teals all shift blue
+        # at 60%, pure green unaffected — a channel-balance artifact, not
+        # something scaling pixel values in software can reproduce, since
+        # that multiplies R/G/B by the same factor and can't shift hue).
+        opts.brightness = 100
         opts.gpio_slowdown = 5  # recommended for Pi 4
         opts.drop_privileges = False  # dropping mid-run breaks venv imports for subsequent modules
         opts.disable_hardware_pulsing = False
@@ -95,7 +102,12 @@ class MatrixDisplay:
         self._canvas = self._matrix.CreateFrameCanvas()
         self._width: int = self._matrix.width
         self._height: int = self._matrix.height
-        log.info("Matrix ready: %d×%d px, brightness %d%%", self._width, self._height, brightness)
+        log.info(
+            "Matrix ready: %d×%d px, software brightness %d%% (hardware PWM fixed at 100%%)",
+            self._width,
+            self._height,
+            brightness,
+        )
 
     # ── Properties ───────────────────────────────────────────────────────────
 
@@ -113,24 +125,18 @@ class MatrixDisplay:
         """
         Update panel brightness at runtime (0-100), e.g. for a day/night schedule.
 
-        On real hardware this maps directly to the matrix's PWM brightness
-        (takes effect on the next SwapOnVSync, no reinit needed). In dev mode
-        there's no PWM to drive, so render() scales the preview image instead —
-        that also makes the schedule visible when eyeballing --dev.
+        Applied by scaling pixel values in render() (both on hardware and in
+        dev mode) rather than the matrix's own PWM brightness control — see
+        the comment in _init_hardware() for why.
         """
-        brightness = max(0, min(100, brightness))
-        if brightness == self._brightness:
-            return
-        self._brightness = brightness
-        if not self._dev:
-            self._matrix.brightness = brightness
+        self._brightness = max(0, min(100, brightness))
 
     # ── Rendering ─────────────────────────────────────────────────────────────
 
     def render(self, image: Image.Image) -> None:
         """Push *image* to the display (or dev preview)."""
         img = image.convert("RGB")
-        if self._dev and self._brightness < 100:
+        if self._brightness < 100:
             img = ImageEnhance.Brightness(img).enhance(self._brightness / 100.0)
         if self._rotation == 180:
             img = img.rotate(180)

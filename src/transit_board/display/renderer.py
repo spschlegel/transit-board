@@ -179,7 +179,7 @@ def draw_panel_chrome(image: Image.Image, departures_per_stop: int = 3) -> None:
     )
 
     # Horizontal divider between stop 1 and stop 2 (departures column only)
-    top_margin, panel_h = layout.stop_panel_layout(departures_per_stop)
+    top_margin, panel_h, _header_gap = layout.stop_panel_layout(departures_per_stop)
     stop_div_y = top_margin + panel_h
     draw.line(
         [
