@@ -27,6 +27,7 @@ from transit_board.providers.transit import Departure, MBTAClient, mock_departur
 from transit_board.providers.weather import WeatherClient, WeatherData, mock_weather
 from transit_board.widgets import clock as clock_widget
 from transit_board.widgets import departures as dep_widget
+from transit_board.widgets import idle as idle_widget
 from transit_board.widgets import uv as uv_widget
 from transit_board.widgets import weather as weather_widget
 
@@ -41,10 +42,22 @@ SCROLL_SPEED = 1  # pixels per frame (scroll advances each rendered frame)
 _FORECAST_PREVIEW_START = dtime(22, 0)
 _FORECAST_PREVIEW_END = dtime(0, 1)
 
+# 21:00 to 06:00 local time: the departures panel switches to the idle
+# moon/starfield widget. A placeholder window for now — CLAUDE.md's plan is
+# to eventually key this off actual MBTA service hours per stop rather than
+# a fixed clock, but this is a reasonable stand-in until that lands.
+_IDLE_START = dtime(21, 0)
+_IDLE_END = dtime(6, 0)
+
 
 def _forecast_preview_active(now: datetime) -> bool:
     t = now.time()
     return t >= _FORECAST_PREVIEW_START or t < _FORECAST_PREVIEW_END
+
+
+def _idle_active(now: datetime) -> bool:
+    t = now.time()
+    return t >= _IDLE_START or t < _IDLE_END
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -67,8 +80,15 @@ class AppState:
     tick: int = 0
 
 
-async def run(cfg: Config, matrix: MatrixDisplay, dev: bool = False) -> None:
-    """Main render loop — runs until cancelled."""
+async def run(
+    cfg: Config, matrix: MatrixDisplay, dev: bool = False, force_idle: bool = False
+) -> None:
+    """Main render loop — runs until cancelled.
+
+    *force_idle* skips the time-of-day check and always renders the idle
+    moon/starfield widget — for previewing it in `make dev` without waiting
+    for the actual idle window.
+    """
     mbta = MBTAClient(cfg.mbta_api_key)
     weather_client = WeatherClient(cfg.lat, cfg.lon)
 
@@ -130,23 +150,30 @@ async def run(cfg: Config, matrix: MatrixDisplay, dev: bool = False) -> None:
             # ── Render frame ──────────────────────────────────────────────────
             image, _ = new_canvas(matrix.width, matrix.height)
 
-            dep_widget.draw_departures(
-                image=image,
-                stops=cfg.stops,
-                departures_by_stop=state.departures_by_stop,
-                departures_per_stop=cfg.display.departures_per_stop,
-                scroll_offset=state.scroll_offset,
-                tick=state.tick,
-            )
+            now = datetime.now()
+            idle_active = force_idle or _idle_active(now)
+            if idle_active:
+                idle_widget.draw_idle(image=image, tick=state.tick, now=now)
+            else:
+                dep_widget.draw_departures(
+                    image=image,
+                    stops=cfg.stops,
+                    departures_by_stop=state.departures_by_stop,
+                    departures_per_stop=cfg.display.departures_per_stop,
+                    scroll_offset=state.scroll_offset,
+                    tick=state.tick,
+                )
             clock_widget.draw_clock(image=image)
-            show_forecast = _forecast_preview_active(datetime.now())
+            show_forecast = _forecast_preview_active(now)
             weather_widget.draw_weather(
                 image=image, weather=state.weather, tick=state.tick, show_forecast=show_forecast
             )
             uv_widget.draw_uv(image=image, weather=state.weather, show_forecast=show_forecast)
 
             draw_panel_chrome(  # divider + section lines on top
-                image, departures_per_stop=cfg.display.departures_per_stop
+                image,
+                departures_per_stop=cfg.display.departures_per_stop,
+                show_stop_divider=not idle_active,
             )
             matrix.render(image)
 

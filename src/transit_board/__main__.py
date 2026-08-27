@@ -27,6 +27,12 @@ def main() -> None:
         help="Path to config.toml (default: config.toml)",
     )
     parser.add_argument(
+        "--force-idle",
+        action="store_true",
+        help="Always render the idle moon/starfield widget, regardless of time of day "
+        "(for previewing it without waiting for the actual idle window)",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -39,6 +45,11 @@ def main() -> None:
         format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
+    # httpx logs one INFO line per HTTP request ("HTTP Request: GET ... 200 OK") —
+    # with transit refreshing every refresh.transit_secs per stop, that drowns out
+    # our own logs at INFO level. Keep it at WARNING regardless of --log-level.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     log = logging.getLogger(__name__)
 
     # Load config
@@ -83,7 +94,7 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _shutdown)
 
     try:
-        event_loop.run_until_complete(run(cfg, matrix, dev=args.dev))
+        event_loop.run_until_complete(run(cfg, matrix, dev=args.dev, force_idle=args.force_idle))
     except (asyncio.CancelledError, KeyboardInterrupt):
         pass
     finally:
