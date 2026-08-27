@@ -202,10 +202,6 @@ def _draw_icon(image: Image.Image, ox: int, oy: int, code: int, scale: int = 1) 
             put(x, y, layout.YELLOW if (x, y) in _STORM_LIGHTNING else layout.DIM)
 
 
-_TEMP_SCALE_MIN = -10.0  # °C mapped to an empty bar
-_TEMP_SCALE_MAX = 35.0  # °C mapped to a full bar
-
-
 def _temp_color(temp_c: float) -> tuple[int, int, int]:
     """Rough comfort-scale colour: cold blue → mild green → hot red."""
     if temp_c < 0:
@@ -221,7 +217,7 @@ def _temp_color(temp_c: float) -> tuple[int, int, int]:
     return layout.RED
 
 
-# ── Public draw function ───────────────────────────────────────────────
+# ── Public draw function ──────────────────────────────────────────
 
 
 def draw_weather(
@@ -232,7 +228,11 @@ def draw_weather(
     show_forecast: bool = False,
 ) -> None:
     """
-    Render temperature (TEMP section) and icon+label (WEATHER section) in info strip.
+    Render the WEATHER (condition icon + label) and TEMP sections of the info column.
+
+    Both are compact single-row designs: this layout gives the clock most of
+    the column's height, so these sections only get 12-14px each. Content in
+    both is centred as a group within the column width.
 
     *show_forecast* is the 22:00-00:01 evening preview window (see loop.py):
     the conditions icon/label switch to tomorrow's forecast. Temperature always
@@ -241,76 +241,64 @@ def draw_weather(
     """
     draw = get_draw(image)
     # Tiny5 only rasterizes cleanly at its native size (8px) and exact
-    # multiples (16px, too wide for these 32px columns) — anything in
-    # between comes out with uneven stroke widths and glyph artifacts, so
-    # text stays at 8px everywhere; the colour-scale bars below are what give
-    # these sections more visual weight instead of a bigger point size.
+    # multiples (16px, too wide for this 44px column) — anything in between
+    # comes out with uneven stroke widths and glyph artifacts, so text stays
+    # at 8px everywhere in this widget.
     font = get_font(font_path, size=8)
+    x0 = layout.INFO_X
+    w = layout.INFO_W
 
-    # ── Temperature section: current (line 1) + today's max (line 2) ─────
-    # Mirrors the UV widget's current/max + colour-scale-bar layout.
-    tx0 = layout.TEMP_X
-    tcol_w = layout.TEMP_W
-    ty0 = layout.INFO_Y
-    draw.rectangle(
-        [tx0, ty0, tx0 + tcol_w - 1, ty0 + layout.INFO_H - 1],
-        fill=layout.SIDEBAR_BG,
-    )
-    if weather is not None:
-        temp_str = f"{weather.temperature_c:.0f}\u00b0C"
-        max_str = f"^{weather.temperature_max_c:.0f}\u00b0"
-        temp_color = _temp_color(weather.temperature_c)
-
-        bbox = draw.textbbox((0, 0), temp_str, font=font)
-        tx = tx0 + max(0, (tcol_w - (bbox[2] - bbox[0])) // 2)
-        draw.text((tx, ty0 + 4), temp_str, font=font, fill=temp_color)
-
-        bbox = draw.textbbox((0, 0), max_str, font=font)
-        mx = tx0 + max(0, (tcol_w - (bbox[2] - bbox[0])) // 2)
-        draw.text((mx, ty0 + 15), max_str, font=font, fill=layout.DIM)
-
-        # Colour-scale temperature bar (2 px tall, near bottom), mirrors the
-        # UV widget's gauge so the two columns read as one visual family.
-        bar_max = tcol_w - 4
-        frac = (weather.temperature_c - _TEMP_SCALE_MIN) / (_TEMP_SCALE_MAX - _TEMP_SCALE_MIN)
-        bar_w = int(max(0.0, min(frac, 1.0)) * bar_max)
-        bar_y = ty0 + layout.INFO_H - 5
-        if bar_w > 0:
-            draw.rectangle(
-                [tx0 + 2, bar_y, tx0 + 2 + bar_w - 1, bar_y + 1],
-                fill=temp_color,
-            )
-    else:
-        draw.text((tx0 + 2, ty0 + 4), "--\u00b0C", font=font, fill=layout.DIM)
-
-    # ── Weather section: condition icon (2x scale) + short label ─────
+    # ── Weather section: condition icon + short label, centred as a group ──
     # In the forecast-preview window, both swap to tomorrow's; the label slot
     # shows "TMRW" instead of the WMO short-code so it's clear at a glance
     # this isn't the current condition (the icon alone reads as "now" otherwise).
-    wx0 = layout.WEATHER_X
-    ww = layout.WEATHER_W
-    y0 = layout.INFO_Y
-    draw.rectangle(
-        [wx0, y0, wx0 + ww - 1, y0 + layout.INFO_H - 1],
-        fill=layout.SIDEBAR_BG,
-    )
+    wy0 = layout.WEATHER_Y
     if weather is not None:
         code = weather.weather_code_tomorrow if show_forecast else weather.weather_code
         cond_txt = "TMRW" if show_forecast else weather.short_label
 
-        icon_scale = 2
-        icon_px = 7 * icon_scale
-        icon_x = wx0 + (ww - icon_px) // 2
-        icon_y = y0 + 2
+        icon_scale = 1
+        icon_px = 7 * icon_scale  # 7px, fits the 10px-tall WEATHER_H with room to spare
+        gap = 3
+        bbox = draw.textbbox((0, 0), cond_txt, font=font)
+        label_w = bbox[2] - bbox[0]
+
+        group_w = icon_px + gap + label_w
+        icon_x = x0 + max(0, (w - group_w) // 2)
+        icon_y = wy0 + (layout.WEATHER_H - icon_px) // 2
         _draw_icon(image, icon_x, icon_y, code, scale=icon_scale)
 
-        bbox = draw.textbbox((0, 0), cond_txt, font=font)
-        lw = bbox[2] - bbox[0]
-        draw.text(
-            (wx0 + max(0, (ww - lw) // 2), icon_y + icon_px + 2),
-            cond_txt,
-            font=font,
-            fill=layout.TEAL,
-        )
+        label_x = icon_x + icon_px + gap
+        lh = bbox[3] - bbox[1]
+        label_y = wy0 + (layout.WEATHER_H - lh) // 2 - bbox[1]
+        draw.text((label_x, label_y), cond_txt, font=font, fill=layout.TEAL)
     else:
-        draw.text((wx0 + 8, y0 + 11), "---", font=font, fill=layout.DIM)
+        bbox = draw.textbbox((0, 0), "---", font=font)
+        tx = x0 + max(0, (w - (bbox[2] - bbox[0])) // 2)
+        ty = wy0 + (layout.WEATHER_H - (bbox[3] - bbox[1])) // 2 - bbox[1]
+        draw.text((tx, ty), "---", font=font, fill=layout.DIM)
+
+    # ── Temp section: "{current} {^max}" combined on one line, centred ──
+    ty0 = layout.TEMP_Y
+    if weather is not None:
+        cur_str = f"{weather.temperature_c:.0f}\u00b0C"
+        max_str = f" ^{weather.temperature_max_c:.0f}\u00b0"
+        temp_color = _temp_color(weather.temperature_c)
+
+        cur_bbox = draw.textbbox((0, 0), cur_str, font=font)
+        max_bbox = draw.textbbox((0, 0), max_str, font=font)
+        cur_w = cur_bbox[2] - cur_bbox[0]
+        total_w = cur_w + (max_bbox[2] - max_bbox[0])
+        th = cur_bbox[3] - cur_bbox[1]
+
+        tx = x0 + max(0, (w - total_w) // 2)
+        ty = ty0 + (layout.TEMP_H - th) // 2 - cur_bbox[1]
+        # Current temp keeps the comfort-scale colour; the secondary max
+        # reading is dimmed so the two don't read as one undifferentiated value.
+        draw.text((tx, ty), cur_str, font=font, fill=temp_color)
+        draw.text((tx + cur_w, ty), max_str, font=font, fill=layout.DIM)
+    else:
+        bbox = draw.textbbox((0, 0), "--\u00b0C", font=font)
+        tx = x0 + max(0, (w - (bbox[2] - bbox[0])) // 2)
+        ty = ty0 + (layout.TEMP_H - (bbox[3] - bbox[1])) // 2 - bbox[1]
+        draw.text((tx, ty), "--\u00b0C", font=font, fill=layout.DIM)

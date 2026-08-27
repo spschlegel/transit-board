@@ -159,32 +159,39 @@ def draw_chip(
     return chip_w
 
 
-def draw_panel_chrome(image: Image.Image) -> None:
+def draw_panel_chrome(image: Image.Image, departures_per_stop: int = 3) -> None:
     """
     Draw structural chrome on top of all widget layers (always drawn last):
-      • Horizontal divider at HORIZ_DIV_Y — full width
-      • Vertical stop divider at STOP_DIV_X — transit panel only (y 0..TRANSIT_H-1)
-      • Vertical info-strip dividers at INFO_DIV_XS — info strip only (y INFO_Y..DISPLAY_H-1)
+      • Vertical divider at VERT_DIV_X — full height, info column vs. departures
+      • Horizontal stop divider — departures column only, position depends on
+        *departures_per_stop* (must match what draw_departures() was called
+        with — see layout.stop_panel_layout())
+      • Horizontal info-column dividers at INFO_DIV_YS — info column only
     """
     from transit_board.display import layout
 
     draw = ImageDraw.Draw(image)
 
-    # Horizontal transit / info-strip divider
+    # Vertical divider between info column and departures (full height)
     draw.line(
-        [(0, layout.HORIZ_DIV_Y), (layout.DISPLAY_W - 1, layout.HORIZ_DIV_Y)],
+        [(layout.VERT_DIV_X, 0), (layout.VERT_DIV_X, layout.DISPLAY_H - 1)],
         fill=layout.PANEL_DIVIDER,
     )
 
-    # Vertical divider between stop 1 and stop 2 (transit panel only)
+    # Horizontal divider between stop 1 and stop 2 (departures column only)
+    top_margin, panel_h, _header_gap = layout.stop_panel_layout(departures_per_stop)
+    stop_div_y = top_margin + panel_h
     draw.line(
-        [(layout.STOP_DIV_X, 0), (layout.STOP_DIV_X, layout.TRANSIT_H - 1)],
+        [
+            (layout.DEPARTURES_X, stop_div_y),
+            (layout.DEPARTURES_X + layout.DEPARTURES_W - 1, stop_div_y),
+        ],
         fill=layout.PANEL_DIVIDER,
     )
 
-    # Vertical dividers within the info strip
-    for div_x in layout.INFO_DIV_XS:
+    # Horizontal dividers within the info column
+    for div_y in layout.INFO_DIV_YS:
         draw.line(
-            [(div_x, layout.INFO_Y), (div_x, layout.DISPLAY_H - 1)],
+            [(layout.INFO_X, div_y), (layout.INFO_X + layout.INFO_W - 1, div_y)],
             fill=layout.SECTION_DIV,
         )
