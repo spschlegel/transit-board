@@ -6,12 +6,17 @@ takeover).
 Always logo-forward: a game's card shows each competitor's logo (falling
 back to a coloured abbreviation chip only when no logo is available), the
 score between them, and — when there's enough room — a status line below.
-Liveness is conveyed by a single dot (same idiom as departures.py's realtime
-dot), not a text label, so there's no "LIVE"/league-name text competing for
-space with the name and score. Preferring legible logos over cramming more
-games on screen means fewer games are visible per page when there's a lot
-going on (e.g. a full NFL Sunday) — the overflow pages through the rest
-every _PAGE_FRAMES frames instead.
+Preferring legible logos over cramming more games on screen means fewer
+games are visible per page when there's a lot going on (e.g. a full NFL
+Sunday) — the overflow pages through the rest every _PAGE_FRAMES frames
+instead.
+
+The status line (game clock, "3rd", "Final", etc) is drawn at the same 8px
+font as the score rather than the 7px chip font used for abbreviations —
+Tiny5 only rasterizes cleanly at 8px/16px (see CLAUDE.md), and at 7px
+arbitrary ESPN strings (colons in a clock like "2:16", letter pairs like the
+"la" in "Final") showed visible glyph-spacing artifacts. The 7px chip font
+stays fine for abbreviations, which are always short, font-tested strings.
 """
 
 from __future__ import annotations
@@ -90,11 +95,6 @@ def _draw_game(
         draw_chip(image, right_start, chip_y, home.abbreviation, accent, font_chip, pad_x=1)
         right_edge = right_start
 
-    # Live indicator: a single dot, same idiom as departures.py's realtime
-    # dot — presence means live, absence means finished. No "LIVE" text.
-    if game.status == "in":
-        draw.point((x0 + w - 2, y0 + 2), fill=layout.GREEN)
-
     mid_x0 = left_edge + 2
     mid_x1 = right_edge - 2
     mid_w = mid_x1 - mid_x0
@@ -119,14 +119,14 @@ def _draw_game(
         else:
             status_text = game.status_detail or ("FINAL" if game.status != "in" else "")
         if status_text:
-            status_w = text_pixel_width(font_chip, status_text)
+            status_w = text_pixel_width(font, status_text)
             status_x = mid_x0 + max(0, (mid_w - status_w) // 2) if status_w <= mid_w else mid_x0
             status_y = score_y + 9
             draw_text_clipped(
                 image=image,
                 xy=(status_x, status_y),
                 text=status_text,
-                font=font_chip,
+                font=font,
                 color=layout.WHITE,
                 max_width=mid_w,
                 row_h=8,
