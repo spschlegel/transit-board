@@ -128,3 +128,20 @@ LINE_COLORS: dict[str, tuple[int, int, int]] = {
     "sl": WHITE,
     "purple": PURPLE,
 }
+
+# ── Sport league → accent colour (reuses the existing LED-tuned palette —
+# see CLAUDE.md on why these RGB values aren't arbitrary) ──────────────────────
+SPORT_COLORS: dict[str, tuple[int, int, int]] = {
+    "nfl": ORANGE,
+    "bundesliga": RED,
+    "mlb": BLUE,
+    "tennis": PURPLE,
+}
+
+# Logo sizes for the scores widget's two density tiers (see widgets/scores.py):
+# SPACIOUS is used when a game has enough room for a legible team/player logo;
+# COMPACT-tier rows fall back to text abbreviations entirely rather than a
+# smaller logo, since there's no size between these that reads cleanly on the
+# panel's pixel pitch.
+SPORTS_LOGO_SIZE_COMPACT = 8
+SPORTS_LOGO_SIZE_SPACIOUS = 14

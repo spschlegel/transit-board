@@ -14,20 +14,24 @@ import asyncio
 import logging
 import math
 import time
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta, timezone
 from datetime import time as dtime
 from typing import Optional
 
 from transit_board.config import Config
+from transit_board.display import layout
 from transit_board.display.matrix import MatrixDisplay
 from transit_board.display.renderer import draw_panel_chrome, new_canvas
 from transit_board.providers.cache import TTLCache
+from transit_board.providers.logos import LogoCache
+from transit_board.providers.sports import Game, SportsClient, mock_games, relevant_games
 from transit_board.providers.transit import Departure, MBTAClient, mock_departures
 from transit_board.providers.weather import WeatherClient, WeatherData, mock_weather
 from transit_board.widgets import clock as clock_widget
 from transit_board.widgets import departures as dep_widget
 from transit_board.widgets import idle as idle_widget
+from transit_board.widgets import scores as scores_widget
 from transit_board.widgets import uv as uv_widget
 from transit_board.widgets import weather as weather_widget
 
@@ -76,27 +80,83 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 class AppState:
     departures_by_stop: dict[str, list[Departure]] = field(default_factory=dict)
     weather: Optional[WeatherData] = None
+    games: list[Game] = field(default_factory=list)
+    # event_id -> first time it was observed as finished ("post"). ESPN doesn't
+    # reliably expose a "finished at" timestamp, so this is how the post-game
+    # display window (SportsConfig.post_game_window_minutes) is measured —
+    # see the comment on Game.end_time in providers/sports.py.
+    sports_first_seen_post: dict[str, datetime] = field(default_factory=dict)
     scroll_offset: int = 0
     tick: int = 0
 
 
+@dataclass(frozen=True)
+class _PanelPlan:
+    kind: str  # "idle" | "departures" | "sports_full" | "sports_hybrid"
+    games: list[Game]
+    show_stop_divider: bool
+
+
+def _resolve_panel(
+    cfg: Config, state: AppState, now: datetime, force_idle: bool, force_sports: bool
+) -> _PanelPlan:
+    """Decide what goes in the departures-panel region this frame.
+
+    *now* is naive local time (matches _idle_active's convention); the
+    relevance filter internally uses its own tz-aware UTC clock.
+    """
+    idle_wanted = force_idle or _idle_active(now)
+    mode = "sports" if force_sports else cfg.sports.mode
+
+    if mode == "transit":
+        if idle_wanted:
+            return _PanelPlan("idle", [], False)
+        return _PanelPlan("departures", [], True)
+
+    relevant = relevant_games(state.games, cfg.sports, datetime.now(timezone.utc))
+
+    if mode == "sports":
+        # Explicit/forced sports always takes over fully, even with zero
+        # relevant games — the widget's own "No games" state shows; "force"
+        # means force, no idle fallback.
+        return _PanelPlan("sports_full", relevant, False)
+
+    # mode == "auto": hybrid
+    if not relevant:
+        return _PanelPlan("idle", [], False) if idle_wanted else _PanelPlan("departures", [], True)
+    if idle_wanted and not cfg.sports.prefer_scores_over_idle:
+        return _PanelPlan("idle", [], False)
+    if len(relevant) <= cfg.sports.hybrid_compact_max_games and len(cfg.stops) >= 2:
+        return _PanelPlan("sports_hybrid", relevant, True)
+    return _PanelPlan("sports_full", relevant, False)
+
+
 async def run(
-    cfg: Config, matrix: MatrixDisplay, dev: bool = False, force_idle: bool = False
+    cfg: Config,
+    matrix: MatrixDisplay,
+    dev: bool = False,
+    force_idle: bool = False,
+    force_sports: bool = False,
 ) -> None:
     """Main render loop — runs until cancelled.
 
     *force_idle* skips the time-of-day check and always renders the idle
     moon/starfield widget — for previewing it in `make dev` without waiting
-    for the actual idle window.
+    for the actual idle window. *force_sports* likewise always renders the
+    full-takeover sports view, regardless of config sports.mode or how many
+    relevant games there are.
     """
     mbta = MBTAClient(cfg.mbta_api_key)
     weather_client = WeatherClient(cfg.lat, cfg.lon)
+    sports_client = SportsClient()
+    logo_cache = LogoCache()
 
     # Per-stop TTL caches
     transit_caches: dict[str, TTLCache[list[Departure]]] = {
         stop.id: TTLCache(cfg.refresh.transit_secs) for stop in cfg.stops
     }
     weather_cache: TTLCache[WeatherData] = TTLCache(cfg.refresh.weather_secs)
+    sports_cache: TTLCache[list[Game]] = TTLCache(cfg.refresh.sports_secs)
 
     state = AppState()
 
@@ -127,6 +187,7 @@ async def run(
         for stop in cfg.stops:
             state.departures_by_stop[stop.id] = mock_departures(stop.id, stop.type)
         state.weather = mock_weather()
+        state.games = mock_games()
         log.info("Dev mode: loaded mock data for %d stop(s)", len(cfg.stops))
 
     try:
@@ -142,6 +203,7 @@ async def run(
                     state,
                 )
                 await _refresh_weather(cfg, weather_client, weather_cache, state)
+                await _refresh_sports(cfg, sports_client, logo_cache, sports_cache, state)
 
             # ── Brightness schedule (checked ~once/sec, not every frame) ────────
             if state.tick % 20 == 0:
@@ -151,10 +213,11 @@ async def run(
             image, _ = new_canvas(matrix.width, matrix.height)
 
             now = datetime.now()
-            idle_active = force_idle or _idle_active(now)
-            if idle_active:
+            plan = _resolve_panel(cfg, state, now, force_idle, force_sports)
+
+            if plan.kind == "idle":
                 idle_widget.draw_idle(image=image, tick=state.tick, now=now)
-            else:
+            elif plan.kind == "departures":
                 dep_widget.draw_departures(
                     image=image,
                     stops=cfg.stops,
@@ -163,6 +226,44 @@ async def run(
                     scroll_offset=state.scroll_offset,
                     tick=state.tick,
                 )
+            elif plan.kind == "sports_full":
+                scores_widget.draw_scores(
+                    image=image,
+                    games=plan.games,
+                    logo_cache=logo_cache,
+                    x0=layout.DEPARTURES_X,
+                    y0=0,
+                    w=layout.DEPARTURES_W,
+                    h=layout.DISPLAY_H,
+                    tick=state.tick,
+                )
+            else:  # "sports_hybrid" — one slot keeps real departures, the other shows scores
+                top_margin, panel_h, _header_gap = layout.stop_panel_layout(
+                    cfg.display.departures_per_stop
+                )
+                sports_slot = max(0, min(cfg.sports.replaceable_stop_index, len(cfg.stops[:2]) - 1))
+                kept_slot = 1 - sports_slot
+                kept_stop = cfg.stops[kept_slot]
+                dep_widget.draw_single_stop(
+                    image=image,
+                    stop=kept_stop,
+                    deps=state.departures_by_stop.get(kept_stop.id, []),
+                    n_rows=cfg.display.departures_per_stop,
+                    scroll_offset=state.scroll_offset,
+                    tick=state.tick,
+                    slot_index=kept_slot,
+                )
+                scores_widget.draw_scores(
+                    image=image,
+                    games=plan.games,
+                    logo_cache=logo_cache,
+                    x0=layout.DEPARTURES_X,
+                    y0=top_margin + sports_slot * panel_h,
+                    w=layout.DEPARTURES_W,
+                    h=panel_h,
+                    tick=state.tick,
+                )
+
             clock_widget.draw_clock(image=image)
             show_forecast = _forecast_preview_active(now)
             weather_widget.draw_weather(
@@ -173,7 +274,7 @@ async def run(
             draw_panel_chrome(  # divider + section lines on top
                 image,
                 departures_per_stop=cfg.display.departures_per_stop,
-                show_stop_divider=not idle_active,
+                show_stop_divider=plan.show_stop_divider,
             )
             matrix.render(image)
 
@@ -199,6 +300,8 @@ async def run(
     finally:
         await mbta.aclose()
         await weather_client.aclose()
+        await sports_client.aclose()
+        await logo_cache.aclose()
 
 
 # ---------------------------------------------------------------------------
@@ -255,3 +358,50 @@ async def _refresh_weather(
         )
     except Exception as exc:
         log.warning("Weather refresh failed: %s", exc)
+
+
+async def _refresh_sports(
+    cfg: Config,
+    client: SportsClient,
+    logo_cache: LogoCache,
+    cache: TTLCache[list[Game]],
+    state: AppState,
+) -> None:
+    if not cache.expired:
+        return
+    try:
+        games = await client.fetch_all(cfg.sports)
+    except Exception as exc:
+        log.warning("Sports refresh failed: %s", exc)
+        return
+
+    now = datetime.now(timezone.utc)
+    seen_ids: set[str] = set()
+    resolved: list[Game] = []
+    for g in games:
+        seen_ids.add(g.event_id)
+        if g.status == "post" and g.end_time is None:
+            first_seen = state.sports_first_seen_post.get(g.event_id)
+            if first_seen is None:
+                first_seen = now
+                state.sports_first_seen_post[g.event_id] = now
+            g = replace(g, end_time=first_seen)
+        resolved.append(g)
+
+    # Prune bookkeeping for events no longer returned or long past the
+    # display window, so this dict doesn't grow unbounded over long uptimes.
+    prune_before = now - timedelta(minutes=cfg.sports.post_game_window_minutes * 2)
+    state.sports_first_seen_post = {
+        eid: ts
+        for eid, ts in state.sports_first_seen_post.items()
+        if eid in seen_ids and ts >= prune_before
+    }
+
+    cache.set(resolved)
+    state.games = resolved
+
+    urls = {c.logo_url for g in resolved for c in g.competitors if c.logo_url}
+    if urls:
+        await logo_cache.ensure(urls)
+
+    log.debug("Sports: %d relevant-or-not game(s) fetched", len(resolved))

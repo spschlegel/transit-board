@@ -33,6 +33,12 @@ def main() -> None:
         "(for previewing it without waiting for the actual idle window)",
     )
     parser.add_argument(
+        "--force-sports",
+        action="store_true",
+        help="Always render the full-takeover sports scores view, regardless of "
+        "config sports.mode or relevant-game count (for previewing in `make dev`)",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -94,7 +100,15 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _shutdown)
 
     try:
-        event_loop.run_until_complete(run(cfg, matrix, dev=args.dev, force_idle=args.force_idle))
+        event_loop.run_until_complete(
+            run(
+                cfg,
+                matrix,
+                dev=args.dev,
+                force_idle=args.force_idle,
+                force_sports=args.force_sports,
+            )
+        )
     except (asyncio.CancelledError, KeyboardInterrupt):
         pass
     finally:
