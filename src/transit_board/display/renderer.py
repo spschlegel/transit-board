@@ -159,13 +159,17 @@ def draw_chip(
     return chip_w
 
 
-def draw_panel_chrome(image: Image.Image, departures_per_stop: int = 3) -> None:
+def draw_panel_chrome(
+    image: Image.Image, departures_per_stop: int = 3, show_stop_divider: bool = True
+) -> None:
     """
     Draw structural chrome on top of all widget layers (always drawn last):
       • Vertical divider at VERT_DIV_X — full height, info column vs. departures
       • Horizontal stop divider — departures column only, position depends on
         *departures_per_stop* (must match what draw_departures() was called
-        with — see layout.stop_panel_layout())
+        with — see layout.stop_panel_layout()). Skipped when *show_stop_divider*
+        is False (idle mode: the moon/starfield widget occupies that whole
+        column instead of two stop panels, so there's nothing to divide).
       • Horizontal info-column dividers at INFO_DIV_YS — info column only
     """
     from transit_board.display import layout
@@ -179,15 +183,16 @@ def draw_panel_chrome(image: Image.Image, departures_per_stop: int = 3) -> None:
     )
 
     # Horizontal divider between stop 1 and stop 2 (departures column only)
-    top_margin, panel_h, _header_gap = layout.stop_panel_layout(departures_per_stop)
-    stop_div_y = top_margin + panel_h
-    draw.line(
-        [
-            (layout.DEPARTURES_X, stop_div_y),
-            (layout.DEPARTURES_X + layout.DEPARTURES_W - 1, stop_div_y),
-        ],
-        fill=layout.PANEL_DIVIDER,
-    )
+    if show_stop_divider:
+        top_margin, panel_h, _header_gap = layout.stop_panel_layout(departures_per_stop)
+        stop_div_y = top_margin + panel_h
+        draw.line(
+            [
+                (layout.DEPARTURES_X, stop_div_y),
+                (layout.DEPARTURES_X + layout.DEPARTURES_W - 1, stop_div_y),
+            ],
+            fill=layout.PANEL_DIVIDER,
+        )
 
     # Horizontal dividers within the info column
     for div_y in layout.INFO_DIV_YS:
