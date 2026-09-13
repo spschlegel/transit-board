@@ -1,15 +1,17 @@
 """
 Sports scores widget — draws into a caller-supplied bounding box (either one
 stop-slot for hybrid mode, or the full departures-panel region for a full
-takeover), following the same visual language as widgets/departures.py
-(chips, urgency colour, scrolling overflow) rather than inventing a new one.
+takeover).
 
-Density is tier-selected, not continuously scaled: with only 8px/16px text
-legible on the bundled font (see CLAUDE.md), there are effectively two usable
-densities, not a smooth continuum — a "card" tier with a team/player logo
-when there's room (>= _CARD_MIN_H px/game), and a compact "row" tier (one 8px
-line/game, abbreviations only) when there isn't. More relevant games than fit
-even at the row-tier floor page-flip every _PAGE_FRAMES frames.
+Always logo-forward: a game's card shows each competitor's logo (falling
+back to a coloured abbreviation chip only when no logo is available), the
+score between them, and — when there's enough room — a status line below.
+Liveness is conveyed by a single dot (same idiom as departures.py's realtime
+dot), not a text label, so there's no "LIVE"/league-name text competing for
+space with the name and score. Preferring legible logos over cramming more
+games on screen means fewer games are visible per page when there's a lot
+going on (e.g. a full NFL Sunday) — the overflow pages through the rest
+every _PAGE_FRAMES frames instead.
 """
 
 from __future__ import annotations
@@ -32,71 +34,20 @@ if TYPE_CHECKING:
     from transit_board.providers.logos import LogoCache
     from transit_board.providers.sports import Game
 
-_CARD_MIN_H = 20  # px/game — below this, fall back to the abbreviation-only row tier
+# Floor height per game: SPORTS_LOGO_SIZE_SPACIOUS (14px) plus the 3px top
+# margin below the league accent bar, with no slack — below this we page
+# through games instead of shrinking logos further (there's no legible size
+# between "logo" and "abbreviation chip", see providers/logos.py).
+_MIN_GAME_H = 17
 _PAGE_FRAMES = 600  # ~30s/page at 20fps — long enough to actually read a page of scores
 
-_LEAGUE_TAG = {"nfl": "NFL", "bundesliga": "BUN", "mlb": "MLB", "tennis": "TEN"}
+
+def _visible_count(n_games: int, h: int) -> int:
+    max_fit = max(1, h // _MIN_GAME_H)
+    return min(n_games, max_fit)
 
 
-def _plan(n_games: int, h: int) -> tuple[int, str]:
-    """Return (games_visible_per_page, tier in {"card", "row"})."""
-    if n_games <= 0:
-        return 0, "row"
-    max_rows = max(1, h // layout.ROW_H)
-    visible = min(n_games, max_rows)
-    per_game_h = h // visible
-    tier = "card" if per_game_h >= _CARD_MIN_H else "row"
-    return visible, tier
-
-
-def _draw_row(
-    image: Image.Image,
-    draw: ImageDraw.ImageDraw,
-    game: "Game",
-    x0: int,
-    y0: int,
-    w: int,
-    font: object,
-    font_chip: object,
-    tick: int,
-) -> None:
-    away, home = game.competitors
-    accent = layout.SPORT_COLORS.get(game.league, layout.WHITE)
-    league_tag = _LEAGUE_TAG.get(game.league, game.league[:3].upper())
-
-    chip_w = draw_chip(image, x0 + 1, y0, league_tag, accent, font_chip, pad_x=1)
-
-    is_live = game.status == "in"
-    status_label = "LIVE" if is_live else "FIN"
-    status_w = text_pixel_width(font, status_label)
-    status_x = x0 + w - status_w - 3
-    if is_live:
-        blink = (tick // 15) % 2 == 0
-        status_color = layout.GREEN if blink else (0, 130, 0)
-    else:
-        status_color = layout.WHITE
-    draw.text((status_x, y0), status_label, font=font, fill=status_color)
-
-    if is_live:
-        draw.point((x0 + w - 1, y0 + 1), fill=layout.GREEN)
-
-    mid_text = f"{away.abbreviation} {away.score}-{home.score} {home.abbreviation}".strip()
-    mid_x = x0 + 1 + chip_w + 2
-    mid_max_w = status_x - mid_x - 3
-    if mid_max_w > 0:
-        draw_text_clipped(
-            image=image,
-            xy=(mid_x, y0),
-            text=mid_text,
-            font=font,
-            color=layout.TEAL,
-            max_width=mid_max_w,
-            row_h=layout.ROW_H + 2,
-            scroll_offset=tick,
-        )
-
-
-def _draw_card(
+def _draw_game(
     image: Image.Image,
     draw: ImageDraw.ImageDraw,
     game: "Game",
@@ -139,6 +90,11 @@ def _draw_card(
         draw_chip(image, right_start, chip_y, home.abbreviation, accent, font_chip, pad_x=1)
         right_edge = right_start
 
+    # Live indicator: a single dot, same idiom as departures.py's realtime
+    # dot — presence means live, absence means finished. No "LIVE" text.
+    if game.status == "in":
+        draw.point((x0 + w - 2, y0 + 2), fill=layout.GREEN)
+
     mid_x0 = left_edge + 2
     mid_x1 = right_edge - 2
     mid_w = mid_x1 - mid_x0
@@ -155,18 +111,21 @@ def _draw_card(
     draw.text((score_x, score_y), score_text, font=font, fill=layout.WHITE)
 
     if has_status_line:
-        status_text = game.status_detail or ("LIVE" if game.status == "in" else "FINAL")
-        status_w = text_pixel_width(font_chip, status_text)
-        if status_w > mid_w:
-            status_text = "LIVE" if game.status == "in" else "FIN"
+        status_text = game.status_detail or ("FINAL" if game.status != "in" else "")
+        if status_text:
             status_w = text_pixel_width(font_chip, status_text)
-        status_x = mid_x0 + max(0, (mid_w - status_w) // 2)
-        status_y = score_y + 9
-        blink = (tick // 15) % 2 == 0
-        status_color = (
-            (layout.GREEN if blink else (0, 130, 0)) if game.status == "in" else layout.WHITE
-        )
-        draw.text((status_x, status_y), status_text, font=font_chip, fill=status_color)
+            status_x = mid_x0 + max(0, (mid_w - status_w) // 2) if status_w <= mid_w else mid_x0
+            status_y = score_y + 9
+            draw_text_clipped(
+                image=image,
+                xy=(status_x, status_y),
+                text=status_text,
+                font=font_chip,
+                color=layout.WHITE,
+                max_width=mid_w,
+                row_h=8,
+                scroll_offset=tick,
+            )
 
 
 def draw_scores(
@@ -198,7 +157,7 @@ def draw_scores(
         draw.text((mx, my), msg, font=font, fill=layout.WHITE)
         return
 
-    visible, tier = _plan(len(games), h)
+    visible = _visible_count(len(games), h)
     n_pages = max(1, math.ceil(len(games) / visible))
     page = (tick // _PAGE_FRAMES) % n_pages
     page_games = games[page * visible : page * visible + visible]
@@ -206,8 +165,5 @@ def draw_scores(
     per_game_h = h // max(1, len(page_games))
     y = y0
     for game in page_games:
-        if tier == "card":
-            _draw_card(image, draw, game, x0, y, w, per_game_h, tick, font, font_chip, logo_cache)
-        else:
-            _draw_row(image, draw, game, x0, y, w, font, font_chip, tick)
+        _draw_game(image, draw, game, x0, y, w, per_game_h, tick, font, font_chip, logo_cache)
         y += per_game_h

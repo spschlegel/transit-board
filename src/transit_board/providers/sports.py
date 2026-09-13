@@ -6,8 +6,13 @@ Uses ESPN's undocumented `site.api.espn.com` JSON API: free, no key required,
 but unofficial and could change shape without notice — every fetch method
 below is defensive (`.get()` with fallbacks throughout, try/except around the
 whole thing) so a schema drift on one sport degrades to "fewer games" rather
-than crashing the others. The tennis endpoint in particular is unverified —
-see the warning on fetch_tennis_grand_slams().
+than crashing the others.
+
+All four endpoint shapes below (NFL/Bundesliga/MLB scoreboards and the tennis
+scoreboard) have been confirmed against the live API. Tennis is structurally
+different from the other three: a top-level tennis "event" is a whole
+*tournament* (e.g. "US Open"), not a single match — see the comment above
+_parse_tennis_grouping() for the real nesting.
 """
 
 from __future__ import annotations
@@ -76,6 +81,14 @@ def _parse_espn_date(raw: Optional[str]) -> datetime:
         return datetime.now(timezone.utc)
 
 
+def _sets_won(linescores: list[dict]) -> str:
+    """Tennis has no top-level competitor "score" field, only per-set
+    "linescores" (each with a "winner" bool) — collapse that into a compact
+    "sets won" count, the tennis equivalent of a team sport's score."""
+    won = sum(1 for ls in linescores if ls.get("winner"))
+    return str(won)
+
+
 def _parse_competitor(raw: dict) -> Competitor:
     entity = raw.get("team") or raw.get("athlete") or {}
     name = entity.get("displayName") or entity.get("shortDisplayName") or entity.get("name") or "?"
@@ -85,10 +98,16 @@ def _parse_competitor(raw: dict) -> Competitor:
         logos = entity.get("logos") or []
         if logos:
             logo_url = logos[0].get("href")
+
+    score = raw.get("score")
+    if score in (None, ""):
+        linescores = raw.get("linescores")
+        score = _sets_won(linescores) if linescores else ""
+
     return Competitor(
         name=str(name),
         abbreviation=str(abbr)[:4].upper(),
-        score=str(raw.get("score", "") or ""),
+        score=str(score or ""),
         logo_url=logo_url,
         winner=bool(raw.get("winner", False)),
     )
@@ -130,39 +149,23 @@ def _parse_team_events(data: dict, league: str) -> list[Game]:
     return games
 
 
-def _event_tournament_name(event: dict) -> str:
-    """Best-effort tournament-name lookup across a few plausible field shapes
-    — unverified against the live tennis payload, see fetch_tennis_grand_slams."""
-    for getter in (
-        lambda e: (e.get("tournament") or {}).get("name"),
-        lambda e: (e.get("league") or {}).get("name"),
-        lambda e: (e.get("season") or {}).get("name"),
-        lambda e: e.get("shortName"),
-        lambda e: e.get("name"),
-    ):
-        try:
-            val = getter(event)
-        except Exception:
-            val = None
-        if val:
-            return str(val)
-    return ""
+def _is_grand_slam(tournament: dict) -> bool:
+    # ESPN tags the 4 majors with major=True directly — confirmed against the
+    # live API (US Open example had "major": true). Name-substring match is
+    # kept as a fallback in case that flag is ever missing/unreliable.
+    if tournament.get("major") is True:
+        return True
+    return any(slam in str(tournament.get("name", "")).lower() for slam in GRAND_SLAMS)
 
 
-def _is_grand_slam(tournament_name: str) -> bool:
-    lower = tournament_name.lower()
-    return any(slam in lower for slam in GRAND_SLAMS)
-
-
-def _parse_tennis_event(event: dict, tournament: str) -> Game:
-    status = event.get("status", {}).get("type", {})
+def _parse_tennis_match(match: dict, tournament_name: str) -> Game:
+    status = match.get("status", {}).get("type", {})
     state = status.get("state", "pre")
     detail = status.get("shortDetail") or status.get("detail") or ""
 
-    comp = (event.get("competitions") or [{}])[0]
-    competitors_raw = (comp.get("competitors") or [])[:2]
+    competitors_raw = (match.get("competitors") or [])[:2]
     if len(competitors_raw) != 2:
-        raise ValueError("expected 2 competitors for a singles match")
+        raise ValueError(f"expected 2 competitors for a singles match, got {len(competitors_raw)}")
 
     parsed = [_parse_competitor(c) for c in competitors_raw]
     return Game(
@@ -170,23 +173,42 @@ def _parse_tennis_event(event: dict, tournament: str) -> Game:
         competitors=(parsed[0], parsed[1]),
         status=state,
         status_detail=detail,
-        start_time=_parse_espn_date(event.get("date")),
+        start_time=_parse_espn_date(match.get("date") or match.get("startDate")),
         end_time=None,
-        event_id=str(event.get("id", "")),
-        tournament=tournament,
+        event_id=str(match.get("id", "")),
+        tournament=tournament_name,
     )
 
 
 def _parse_tennis_events(data: dict) -> list[Game]:
+    """
+    Confirmed shape: a top-level "event" here is a whole tournament (e.g.
+    "US Open", spanning weeks, major=true for the 4 Slams), NOT a single
+    match — unlike the NFL/Bundesliga/MLB scoreboards where an "event" is one
+    game. Individual matches live three levels down: tournament["groupings"]
+    is a list of {"grouping": {"slug": "mens-singles", ...}, "competitions":
+    [...]}, one grouping per discipline (mens-singles/womens-singles/mixed-
+    doubles/etc — no separate "gender" field, the discipline slug is it), and
+    each grouping's "competitions" list holds the actual matches (same
+    status/competitors/date shape as a team-sport competition, except a tennis
+    competitor has no "score" field — see _sets_won()).
+    """
     games: list[Game] = []
-    for event in data.get("events", []):
+    for tournament in data.get("events", []):
         try:
-            tournament = _event_tournament_name(event)
             if not _is_grand_slam(tournament):
                 continue
-            games.append(_parse_tennis_event(event, tournament))
+            tournament_name = str(tournament.get("name", ""))
+            for grouping in tournament.get("groupings", []):
+                if (grouping.get("grouping") or {}).get("slug") != "mens-singles":
+                    continue
+                for match in grouping.get("competitions", []):
+                    try:
+                        games.append(_parse_tennis_match(match, tournament_name))
+                    except Exception as exc:
+                        log.warning("Skipping malformed tennis match: %s", exc)
         except Exception as exc:
-            log.warning("Skipping malformed tennis event: %s", exc)
+            log.warning("Skipping malformed tennis tournament: %s", exc)
     return games
 
 
@@ -227,22 +249,18 @@ class SportsClient:
 
     async def fetch_tennis_grand_slams(self) -> list[Game]:
         """
-        UNVERIFIED: this planning/implementation environment has no outbound
-        network access, so this endpoint path and the tennis JSON shape
-        assumed by _parse_tennis_event/_event_tournament_name have not been
-        confirmed against the live ESPN API. Verify with curl/browser before
-        relying on this — try `/tennis/atp/scoreboard` first (ATP as a proxy
-        for "men's"); if that 404s, ESPN may scope tennis by tournament slug
-        instead (e.g. `/tennis/wimbledon/scoreboard`). Whatever the real shape
-        turns out to be, this method's job stays the same: return Games for
-        Grand-Slam singles matches only, and fail soft (log + empty list) —
-        NFL/Bundesliga/MLB must keep working even if this is wrong.
+        The /tennis/atp/scoreboard endpoint returns whatever tournament(s)
+        are currently relevant (in progress / imminent) rather than a full
+        season list — confirmed live: during the US Open it returned exactly
+        that one tournament. _parse_tennis_events() filters to majors
+        (major=True) and men's singles matches within them; see its docstring
+        for the tournament -> groupings -> competitions nesting.
         """
         try:
             data = await self._get("/tennis/atp/scoreboard")
             return _parse_tennis_events(data)
         except Exception as exc:
-            log.warning("Tennis fetch failed (endpoint unverified, see docstring): %s", exc)
+            log.warning("Tennis fetch failed: %s", exc)
             return []
 
     async def fetch_all(self, cfg: "SportsConfig") -> list[Game]:
