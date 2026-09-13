@@ -135,7 +135,7 @@ SPORT_COLORS: dict[str, tuple[int, int, int]] = {
     "nfl": ORANGE,
     "bundesliga": RED,
     "mlb": BLUE,
-    "tennis": PURPLE,
+    "tennis": GREEN,
 }
 
 # Logo sizes for the scores widget's two density tiers (see widgets/scores.py):

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Optional
 
@@ -47,6 +47,7 @@ class Competitor:
     score: str = ""
     logo_url: Optional[str] = None  # None for tennis (no stable roster) — real fallback path
     winner: bool = False
+    game_score: str = ""  # tennis only: games won in the *current* set (score is sets won)
 
 
 @dataclass
@@ -158,6 +159,20 @@ def _is_grand_slam(tournament: dict) -> bool:
     return any(slam in str(tournament.get("name", "")).lower() for slam in GRAND_SLAMS)
 
 
+def _current_set_score(raw: dict) -> str:
+    """Games won *in the set currently being played* (the last linescores
+    entry) — distinct from Competitor.score, which is total sets won. Only
+    meaningful while a match is live; returns "" once there's no set in
+    progress (no linescores at all, e.g. match hasn't started)."""
+    linescores = raw.get("linescores") or []
+    if not linescores:
+        return ""
+    value = linescores[-1].get("value")
+    if value is None:
+        return ""
+    return str(int(value)) if float(value).is_integer() else str(value)
+
+
 def _parse_tennis_match(match: dict, tournament_name: str) -> Game:
     status = match.get("status", {}).get("type", {})
     state = status.get("state", "pre")
@@ -167,7 +182,9 @@ def _parse_tennis_match(match: dict, tournament_name: str) -> Game:
     if len(competitors_raw) != 2:
         raise ValueError(f"expected 2 competitors for a singles match, got {len(competitors_raw)}")
 
-    parsed = [_parse_competitor(c) for c in competitors_raw]
+    parsed = [
+        replace(_parse_competitor(c), game_score=_current_set_score(c)) for c in competitors_raw
+    ]
     return Game(
         league="tennis",
         competitors=(parsed[0], parsed[1]),
@@ -296,6 +313,12 @@ def relevant_games(
     Filter to games worth showing right now: live, or finished within
     cfg.post_game_window_minutes. Never includes "pre" (upcoming) games.
 
+    Tennis is an exception to the post-game window: a Slam draw can have
+    ~250 matches with most of them "post" at any given moment (see
+    providers/sports.py's tennis parsing notes), so a finished tennis match
+    is dropped immediately rather than lingering for post_game_window_minutes
+    like a team-sport score would.
+
     *now* must be tz-aware UTC (matching Game.start_time/end_time) — do not
     pass loop.py's naive local `datetime.now()` used for idle/forecast timing.
     """
@@ -313,6 +336,8 @@ def relevant_games(
         if not enabled.get(g.league, True):
             continue
         if g.status == "pre":
+            continue
+        if g.league == "tennis" and g.status != "in":
             continue
         if g.status == "post":
             if g.end_time is None or (now - g.end_time).total_seconds() > window_secs:
@@ -400,9 +425,12 @@ def mock_games(now: Optional[datetime] = None) -> list[Game]:
         ),
         Game(
             "tennis",
-            (Competitor("Alcaraz", "ALCA", "2"), Competitor("Sinner", "SINN", "1", winner=True)),
+            (
+                Competitor("Alcaraz", "ALCA", "2", game_score="4"),
+                Competitor("Sinner", "SINN", "1", winner=True, game_score="5"),
+            ),
             "in",
-            "3rd Set",
+            "3rd",
             rel(-95),
             None,
             "mock-tennis-1",

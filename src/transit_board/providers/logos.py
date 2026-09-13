@@ -29,6 +29,23 @@ log = logging.getLogger(__name__)
 # the same under `make dev`, `make run`, or any future service wrapper.
 _CACHE_DIR = Path(__file__).resolve().parent.parent / "_cache" / "logos"
 
+# Alpha values below this are treated as fully transparent, at/above as fully
+# opaque. Source logos are anti-aliased (smooth alpha falloff at edges), and
+# so is Image.resize()'s LANCZOS filter — left as-is, partially-transparent
+# edge pixels blend toward the canvas's black background at paste time and
+# read as a dim/faded halo around the logo instead of a crisp edge, the exact
+# same failure mode CLAUDE.md documents for anti-aliased text on this
+# hardware (see renderer.get_draw's fontmode="1"). Binarizing alpha here is
+# the image equivalent of that fix — RGB values are left untouched, so every
+# pixel that survives is drawn at full, un-blended colour.
+_ALPHA_THRESHOLD = 128
+
+
+def _binarize_alpha(img: Image.Image) -> Image.Image:
+    r, g, b, a = img.split()
+    a = a.point(lambda v: 255 if v >= _ALPHA_THRESHOLD else 0)
+    return Image.merge("RGBA", (r, g, b, a))
+
 
 class LogoCache:
     def __init__(self, size: tuple[int, int] = (14, 14), cache_dir: Optional[Path] = None) -> None:
@@ -53,7 +70,7 @@ class LogoCache:
         disk_path = self._disk_path(url)
         if disk_path.exists():
             try:
-                return Image.open(disk_path).convert("RGBA")
+                return _binarize_alpha(Image.open(disk_path).convert("RGBA"))
             except Exception as exc:
                 log.warning("Corrupt cached logo %s, refetching: %s", disk_path, exc)
 
@@ -62,6 +79,7 @@ class LogoCache:
             r.raise_for_status()
             img = Image.open(BytesIO(r.content)).convert("RGBA")
             img = img.resize(self._size, Image.LANCZOS)
+            img = _binarize_alpha(img)
             img.save(disk_path)
             return img
         except Exception as exc:

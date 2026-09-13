@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 # through games instead of shrinking logos further (there's no legible size
 # between "logo" and "abbreviation chip", see providers/logos.py).
 _MIN_GAME_H = 17
-_PAGE_FRAMES = 600  # ~30s/page at 20fps — long enough to actually read a page of scores
+_PAGE_FRAMES = 400  # ~20s/page at 20fps
 
 
 def _visible_count(n_games: int, h: int) -> int:
@@ -101,6 +101,9 @@ def _draw_game(
     if mid_w <= 0:
         return
 
+    # For tennis, .score is sets won (the headline number, like a team
+    # sport's score); the current set's in-progress game score is a second,
+    # more granular number shown on the status line below when there's room.
     score_text = f"{away.score}-{home.score}" if (away.score or home.score) else "vs"
     score_w = text_pixel_width(font, score_text)
     score_x = mid_x0 + max(0, (mid_w - score_w) // 2)
@@ -111,7 +114,10 @@ def _draw_game(
     draw.text((score_x, score_y), score_text, font=font, fill=layout.WHITE)
 
     if has_status_line:
-        status_text = game.status_detail or ("FINAL" if game.status != "in" else "")
+        if game.league == "tennis" and away.game_score and home.game_score:
+            status_text = f"{game.status_detail} {away.game_score}-{home.game_score}".strip()
+        else:
+            status_text = game.status_detail or ("FINAL" if game.status != "in" else "")
         if status_text:
             status_w = text_pixel_width(font_chip, status_text)
             status_x = mid_x0 + max(0, (mid_w - status_w) // 2) if status_w <= mid_w else mid_x0
