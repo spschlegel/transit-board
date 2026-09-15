@@ -35,6 +35,12 @@ ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports"
 _BAYERN_MATCH = "bayern"
 _RED_SOX_ABBR = "BOS"
 
+# Defensive ceiling for relevant_games(): no real NFL/Bundesliga/MLB game
+# runs anywhere near this long (even an extra-innings MLB marathon), so a
+# "post" game whose kickoff is older than this is never eligible, regardless
+# of first-seen-post bookkeeping state — see relevant_games()'s docstring.
+_MAX_GAME_AGE_HOURS = 8
+
 # Substring-matched against a tennis event's tournament/league name — same
 # convention as layout.LINE_COLORS/ROUTE_COLORS (match by name, not by ID).
 GRAND_SLAMS = ("australian open", "roland garros", "french open", "wimbledon", "us open")
@@ -319,6 +325,14 @@ def relevant_games(
     is dropped immediately rather than lingering for post_game_window_minutes
     like a team-sport score would.
 
+    A "post" team-sport game also has to have started within
+    _MAX_GAME_AGE_HOURS to be eligible at all, independent of the
+    first-seen-post bookkeeping loop.py maintains — confirmed live, ESPN's
+    scoreboard endpoints keep returning finished games for days (an NFL
+    scoreboard fetch returned a game 5 days past kickoff), so this is a hard
+    backstop against a multi-day-old game ever being treated as "just
+    finished", regardless of any bookkeeping edge case.
+
     *now* must be tz-aware UTC (matching Game.start_time/end_time) — do not
     pass loop.py's naive local `datetime.now()` used for idle/forecast timing.
     """
@@ -330,6 +344,7 @@ def relevant_games(
         "tennis": cfg.tennis_enabled,
     }
     window_secs = cfg.post_game_window_minutes * 60
+    max_age_secs = _MAX_GAME_AGE_HOURS * 3600
 
     kept = []
     for g in games:
@@ -341,6 +356,8 @@ def relevant_games(
             continue
         if g.status == "post":
             if g.end_time is None or (now - g.end_time).total_seconds() > window_secs:
+                continue
+            if (now - g.start_time).total_seconds() > max_age_secs:
                 continue
         kept.append(g)
 

@@ -15,7 +15,7 @@ import logging
 import math
 import time
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from datetime import time as dtime
 from typing import Optional
 
@@ -388,13 +388,18 @@ async def _refresh_sports(
             g = replace(g, end_time=first_seen)
         resolved.append(g)
 
-    # Prune bookkeeping for events no longer returned or long past the
-    # display window, so this dict doesn't grow unbounded over long uptimes.
-    prune_before = now - timedelta(minutes=cfg.sports.post_game_window_minutes * 2)
+    # Prune bookkeeping only for events no longer returned at all. A time-based
+    # prune here is a trap: ESPN's scoreboard endpoints keep returning "post"
+    # games for days (confirmed live — the NFL scoreboard was still listing a
+    # 5-day-old final), so pruning a still-listed event's timestamp would make
+    # the very next refresh treat it as newly finished and reset its clock —
+    # the game would then cyclically reappear as "relevant" every prune
+    # interval for as long as ESPN keeps listing it, instead of just going
+    # relevant once and staying gone. Bounded naturally: this dict can only
+    # ever hold as many entries as the scoreboards currently return (a few
+    # dozen), so there's no unbounded-growth risk from skipping a time bound.
     state.sports_first_seen_post = {
-        eid: ts
-        for eid, ts in state.sports_first_seen_post.items()
-        if eid in seen_ids and ts >= prune_before
+        eid: ts for eid, ts in state.sports_first_seen_post.items() if eid in seen_ids
     }
 
     cache.set(resolved)
