@@ -41,3 +41,19 @@ night_start = 21:00:00     # local time brightness switches to brightness_night
 [refresh]
 transit_secs = 30        # how often to re-fetch MBTA predictions (seconds)
 weather_secs = 300       # how often to re-fetch weather from Open-Meteo (seconds)
+sports_secs = 120        # how often to re-fetch scores from ESPN (seconds)
+
+# Sports scores mode — replaces some or all of the departures panel with live/
+# recent scores for NFL, FC Bayern Munich (Bundesliga), Red Sox (MLB), and
+# men's Grand Slam tennis. The left info column (clock/weather/UV) is never
+# affected.
+[sports]
+mode = "transit"              # "transit" (never shown) | "sports" (always shown) | "auto" (hybrid)
+nfl_enabled = true             # all NFL games, leaguewide
+bayern_enabled = true          # FC Bayern Munich (Bundesliga) only
+tennis_enabled = true          # men's singles, the 4 Grand Slams only
+red_sox_enabled = true         # Boston Red Sox (MLB) only
+post_game_window_minutes = 60  # how long a finished game stays on screen
+replaceable_stop_index = 1     # which of your [[stops]] "auto" mode may replace with scores (0 or 1)
+hybrid_compact_max_games = 2   # <= this many relevant games -> half-panel; more -> full takeover
+prefer_scores_over_idle = true # show live/recent scores instead of the night idle animation, if any exist

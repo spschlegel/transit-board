@@ -226,3 +226,42 @@ def draw_departures(
             panel_h,
             header_gap,
         )
+
+
+def draw_single_stop(
+    image: Image.Image,
+    stop: StopConfig,
+    deps: list[Departure],
+    n_rows: int,
+    scroll_offset: int,
+    tick: int,
+    slot_index: int,
+    font_path: str | None = None,
+) -> None:
+    """
+    Draw one stop's panel at *slot_index* (0 or 1) — used by hybrid sports
+    mode to keep one stop's real departures visible while the other slot
+    shows scores. Uses the same stop_panel_layout() geometry as
+    draw_departures() so the two stay pixel-aligned.
+    """
+    font = get_font(font_path, size=8)
+    font_chip = get_font(font_path, size=7)
+    brd_bright = (tick // 15) % 2 == 0
+
+    top_margin, panel_h, header_gap = layout.stop_panel_layout(n_rows)
+    x0 = layout.DEPARTURES_X
+    y0 = top_margin + slot_index * panel_h
+    _draw_stop_panel(
+        image,
+        stop,
+        deps,
+        n_rows,
+        scroll_offset,
+        brd_bright,
+        font,
+        font_chip,
+        x0,
+        y0,
+        panel_h,
+        header_gap,
+    )

@@ -10,3 +10,4 @@ rpi-rgb-led-matrix/
 /tmp/transit_board_frame.png
 .DS_Store
 *.log
+src/transit_board/_cache/

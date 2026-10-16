@@ -47,6 +47,20 @@ class DisplayConfig:
 class RefreshConfig:
     transit_secs: int = 30
     weather_secs: int = 300
+    sports_secs: int = 120
+
+
+@dataclass
+class SportsConfig:
+    mode: str = "transit"  # "transit" (never shown) | "sports" (always shown) | "auto" (hybrid)
+    nfl_enabled: bool = True
+    bayern_enabled: bool = True
+    tennis_enabled: bool = True
+    red_sox_enabled: bool = True
+    post_game_window_minutes: int = 60  # how long a finished game stays on screen
+    replaceable_stop_index: int = 1  # which of stops[:2] "auto" hybrid mode may replace (0 or 1)
+    hybrid_compact_max_games: int = 2  # <= this many games -> half-panel; more -> full takeover
+    prefer_scores_over_idle: bool = True  # in "auto", prefer scores over the night idle animation
 
 
 @dataclass
@@ -57,6 +71,7 @@ class Config:
     lon: float
     display: DisplayConfig = field(default_factory=DisplayConfig)
     refresh: RefreshConfig = field(default_factory=RefreshConfig)
+    sports: SportsConfig = field(default_factory=SportsConfig)
     walk_speed_kmh: float = 5.0  # walking speed for "when to leave" auto-calculation
 
 
@@ -117,6 +132,37 @@ def load(path: Path = _DEFAULT_CONFIG) -> Config:
     ref = RefreshConfig(
         transit_secs=int(ref_raw.get("transit_secs", 30)),
         weather_secs=int(ref_raw.get("weather_secs", 300)),
+        sports_secs=int(ref_raw.get("sports_secs", 120)),
+    )
+
+    sports_raw = raw.get("sports", {})
+    sports_defaults = SportsConfig()
+    sports_mode = sports_raw.get("mode", sports_defaults.mode)
+    if sports_mode not in ("transit", "sports", "auto"):
+        warnings.warn(
+            f"sports.mode={sports_mode!r} not supported (only 'transit', 'sports', 'auto') "
+            "— using 'transit'",
+            stacklevel=2,
+        )
+        sports_mode = "transit"
+    sports = SportsConfig(
+        mode=sports_mode,
+        nfl_enabled=bool(sports_raw.get("nfl_enabled", sports_defaults.nfl_enabled)),
+        bayern_enabled=bool(sports_raw.get("bayern_enabled", sports_defaults.bayern_enabled)),
+        tennis_enabled=bool(sports_raw.get("tennis_enabled", sports_defaults.tennis_enabled)),
+        red_sox_enabled=bool(sports_raw.get("red_sox_enabled", sports_defaults.red_sox_enabled)),
+        post_game_window_minutes=int(
+            sports_raw.get("post_game_window_minutes", sports_defaults.post_game_window_minutes)
+        ),
+        replaceable_stop_index=int(
+            sports_raw.get("replaceable_stop_index", sports_defaults.replaceable_stop_index)
+        ),
+        hybrid_compact_max_games=int(
+            sports_raw.get("hybrid_compact_max_games", sports_defaults.hybrid_compact_max_games)
+        ),
+        prefer_scores_over_idle=bool(
+            sports_raw.get("prefer_scores_over_idle", sports_defaults.prefer_scores_over_idle)
+        ),
     )
 
     return Config(
@@ -126,6 +172,7 @@ def load(path: Path = _DEFAULT_CONFIG) -> Config:
         lon=float(loc.get("lon", -71.0589)),
         display=disp,
         refresh=ref,
+        sports=sports,
         walk_speed_kmh=float(loc.get("walk_speed_kmh", 5.0)),
     )
 
@@ -141,6 +188,7 @@ def dev_default() -> Config:
         lat=42.3601,
         lon=-71.0589,
         display=DisplayConfig(departures_per_stop=3),
-        refresh=RefreshConfig(transit_secs=30, weather_secs=300),
+        refresh=RefreshConfig(transit_secs=30, weather_secs=300, sports_secs=120),
+        sports=SportsConfig(),
         walk_speed_kmh=5.0,
     )
