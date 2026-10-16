@@ -40,10 +40,10 @@ log = logging.getLogger(__name__)
 FRAME_INTERVAL = 1.0 / 20  # target ~20 FPS
 SCROLL_SPEED = 1  # pixels per frame (scroll advances each rendered frame)
 
-# 22:00 to 00:01 local time: UV + weather-conditions widgets show tomorrow's
+# 20:00 to 00:01 local time: UV + weather-conditions widgets show tomorrow's
 # forecast instead of current/today — more useful once today is basically
 # over. Reverts at 00:01 once "tomorrow" has actually become today.
-_FORECAST_PREVIEW_START = dtime(22, 0)
+_FORECAST_PREVIEW_START = dtime(20, 0)
 _FORECAST_PREVIEW_END = dtime(0, 1)
 
 # 21:00 to 06:00 local time: the departures panel switches to the idle
