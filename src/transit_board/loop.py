@@ -20,9 +20,11 @@ from datetime import time as dtime
 from typing import Optional
 
 from transit_board.config import Config
+from transit_board.control import Control
 from transit_board.display import layout
 from transit_board.display.matrix import MatrixDisplay
 from transit_board.display.renderer import draw_panel_chrome, new_canvas
+from transit_board.modes import default_scene
 from transit_board.providers.cache import TTLCache
 from transit_board.providers.logos import LogoCache
 from transit_board.providers.sports import Game, SportsClient, mock_games, relevant_games
@@ -46,22 +48,10 @@ SCROLL_SPEED = 1  # pixels per frame (scroll advances each rendered frame)
 _FORECAST_PREVIEW_START = dtime(20, 0)
 _FORECAST_PREVIEW_END = dtime(0, 1)
 
-# 21:00 to 06:00 local time: the departures panel switches to the idle
-# moon/starfield widget. A placeholder window for now — CLAUDE.md's plan is
-# to eventually key this off actual MBTA service hours per stop rather than
-# a fixed clock, but this is a reasonable stand-in until that lands.
-_IDLE_START = dtime(21, 0)
-_IDLE_END = dtime(6, 0)
-
 
 def _forecast_preview_active(now: datetime) -> bool:
     t = now.time()
     return t >= _FORECAST_PREVIEW_START or t < _FORECAST_PREVIEW_END
-
-
-def _idle_active(now: datetime) -> bool:
-    t = now.time()
-    return t >= _IDLE_START or t < _IDLE_END
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -95,56 +85,63 @@ class _PanelPlan:
     kind: str  # "idle" | "departures" | "sports_full" | "sports_hybrid"
     games: list[Game]
     show_stop_divider: bool
+    default: str = ""  # scheduled default scene (ignoring any override)
+    reason: str = ""  # why that default: "transit-window" | "night" | "day"
 
 
-def _resolve_panel(
-    cfg: Config, state: AppState, now: datetime, force_idle: bool, force_sports: bool
-) -> _PanelPlan:
+def _resolve_panel(cfg: Config, state: AppState, now: datetime, control: Control) -> _PanelPlan:
     """Decide what goes in the departures-panel region this frame.
 
-    *now* is naive local time (matches _idle_active's convention); the
-    relevance filter internally uses its own tz-aware UTC clock.
+    Scene = the manual override if one is active, else the scheduled default
+    (modes.default_scene). "auto" shows sports while any game is relevant and
+    falls back to schedule.auto_fallback otherwise. *now* is naive local time;
+    the relevance filter internally uses its own tz-aware UTC clock.
     """
-    idle_wanted = force_idle or _idle_active(now)
-    mode = "sports" if force_sports else cfg.sports.mode
+    sched = cfg.schedule
+    ov = control.override
+    if ov is not None and not ov.active:
+        control.override = ov = None
 
-    if mode == "transit":
-        if idle_wanted:
-            return _PanelPlan("idle", [], False)
-        return _PanelPlan("departures", [], True)
-
+    default, reason = default_scene(sched, now)
+    scene = ov.scene if ov is not None else default
     relevant = relevant_games(state.games, cfg.sports, datetime.now(timezone.utc))
 
-    if mode == "sports":
-        # Explicit/forced sports always takes over fully, even with zero
-        # relevant games — the widget's own "No games" state shows; "force"
-        # means force, no idle fallback.
-        return _PanelPlan("sports_full", relevant, False)
+    # A live game pre-empts the *scheduled* night idle animation, but never a
+    # manual override or a transit window.
+    if (
+        ov is None
+        and reason == "night"
+        and scene == "idle"
+        and relevant
+        and cfg.sports.prefer_scores_over_idle
+    ):
+        scene = "auto"
 
-    # mode == "auto": hybrid
-    if not relevant:
-        return _PanelPlan("idle", [], False) if idle_wanted else _PanelPlan("departures", [], True)
-    if idle_wanted and not cfg.sports.prefer_scores_over_idle:
-        return _PanelPlan("idle", [], False)
-    if len(relevant) <= cfg.sports.hybrid_compact_max_games and len(cfg.stops) >= 2:
-        return _PanelPlan("sports_hybrid", relevant, True)
-    return _PanelPlan("sports_full", relevant, False)
+    def plan(kind: str, games: list[Game], divider: bool) -> _PanelPlan:
+        return _PanelPlan(kind, games, divider, default, reason)
+
+    if scene == "auto":
+        if not relevant:
+            scene = sched.auto_fallback
+        elif len(relevant) <= cfg.sports.hybrid_compact_max_games and len(cfg.stops) >= 2:
+            return plan("sports_hybrid", relevant, True)
+        else:
+            return plan("sports_full", relevant, False)
+
+    if scene == "sports":
+        # Explicit sports takes over fully, even with zero relevant games —
+        # the widget's own "No games" state shows.
+        return plan("sports_full", relevant, False)
+    if scene == "idle":
+        return plan("idle", relevant, False)
+    return plan("departures", relevant, True)
 
 
-async def run(
-    cfg: Config,
-    matrix: MatrixDisplay,
-    dev: bool = False,
-    force_idle: bool = False,
-    force_sports: bool = False,
-) -> None:
+async def run(cfg: Config, matrix: MatrixDisplay, control: Control, dev: bool = False) -> None:
     """Main render loop — runs until cancelled.
 
-    *force_idle* skips the time-of-day check and always renders the idle
-    moon/starfield widget — for previewing it in `make dev` without waiting
-    for the actual idle window. *force_sports* likewise always renders the
-    full-takeover sports view, regardless of config sports.mode or how many
-    relevant games there are.
+    *control* carries the manual scene override in, and the current scene and
+    refresh health out, for the web server (see control.py).
     """
     mbta = MBTAClient(cfg.mbta_api_key)
     weather_client = WeatherClient(cfg.lat, cfg.lon)
@@ -196,14 +193,9 @@ async def run(
 
             # ── Data refresh (skipped in dev mode) ───────────────────────────
             if not dev:
-                await _refresh_transit(
-                    cfg,
-                    mbta,
-                    transit_caches,
-                    state,
-                )
-                await _refresh_weather(cfg, weather_client, weather_cache, state)
-                await _refresh_sports(cfg, sports_client, logo_cache, sports_cache, state)
+                await _refresh_transit(cfg, mbta, transit_caches, state, control)
+                await _refresh_weather(cfg, weather_client, weather_cache, state, control)
+                await _refresh_sports(cfg, sports_client, logo_cache, sports_cache, state, control)
 
             # ── Brightness schedule (checked ~once/sec, not every frame) ────────
             if state.tick % 20 == 0:
@@ -213,7 +205,11 @@ async def run(
             image, _ = new_canvas(matrix.width, matrix.height)
 
             now = datetime.now()
-            plan = _resolve_panel(cfg, state, now, force_idle, force_sports)
+            plan = _resolve_panel(cfg, state, now, control)
+            control.default_scene = plan.default
+            control.default_reason = plan.reason
+            control.panel_kind = plan.kind
+            control.relevant_games = len(plan.games)
 
             if plan.kind == "idle":
                 idle_widget.draw_idle(image=image, tick=state.tick, now=now)
@@ -314,6 +310,7 @@ async def _refresh_transit(
     mbta: MBTAClient,
     caches: dict[str, TTLCache[list[Departure]]],
     state: AppState,
+    control: Control,
 ) -> None:
     """Fetch any expired stop caches in parallel."""
     expired = [s for s in cfg.stops if caches[s.id].expired]
@@ -332,7 +329,9 @@ async def _refresh_transit(
     for stop, result in zip(expired, results):
         if isinstance(result, Exception):
             log.warning("Failed to fetch stop %s: %s", stop.id, result)
+            control.failed("transit", result)
         else:
+            control.refreshed("transit")
             stop_id, deps = result
             caches[stop_id].set(deps)
             state.departures_by_stop[stop_id] = deps
@@ -344,12 +343,14 @@ async def _refresh_weather(
     client: WeatherClient,
     cache: TTLCache[WeatherData],
     state: AppState,
+    control: Control,
 ) -> None:
     if not cache.expired:
         return
     try:
         state.weather = await client.fetch()
         cache.set(state.weather)
+        control.refreshed("weather")
         log.debug(
             "Weather: %.1f°C, code %d, UV %.1f",
             state.weather.temperature_c,
@@ -358,6 +359,7 @@ async def _refresh_weather(
         )
     except Exception as exc:
         log.warning("Weather refresh failed: %s", exc)
+        control.failed("weather", exc)
 
 
 async def _refresh_sports(
@@ -366,6 +368,7 @@ async def _refresh_sports(
     logo_cache: LogoCache,
     cache: TTLCache[list[Game]],
     state: AppState,
+    control: Control,
 ) -> None:
     if not cache.expired:
         return
@@ -373,6 +376,7 @@ async def _refresh_sports(
         games = await client.fetch_all(cfg.sports)
     except Exception as exc:
         log.warning("Sports refresh failed: %s", exc)
+        control.failed("sports", exc)
         return
 
     now = datetime.now(timezone.utc)
@@ -404,6 +408,7 @@ async def _refresh_sports(
 
     cache.set(resolved)
     state.games = resolved
+    control.refreshed("sports")
 
     urls = {c.logo_url for g in resolved for c in g.competitors if c.logo_url}
     if urls:

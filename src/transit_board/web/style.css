@@ -1,0 +1,35 @@
+:root { color-scheme: dark; --bg:#0b0b10; --card:#161620; --line:#262633; --fg:#eceff4;
+  --muted:#8b90a0; --accent:#ff7300; --ok:#2ecc71; --bad:#ff5a52; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg);
+  font:16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+main { max-width:480px; margin:0 auto; padding:16px; }
+h1 { font-size:20px; margin:8px 0 16px; }
+h2 { font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:24px 0 8px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:6px 14px; margin-bottom:12px; }
+.row { display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--line); }
+.row:last-child { border-bottom:0; }
+.label { color:var(--muted); }
+.grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.chip { flex:1; min-width:56px; padding:10px 0; border-radius:999px; border:1px solid var(--line);
+  background:var(--card); color:var(--fg); font-size:15px; }
+.chip[aria-checked="true"] { border-color:var(--accent); color:var(--accent); }
+button { font:inherit; border:0; border-radius:14px; padding:18px 12px; background:var(--card);
+  color:var(--fg); border:1px solid var(--line); cursor:pointer; }
+button:active { transform:scale(.98); }
+button.scene.active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+button.scene small { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+button.wide { width:100%; margin-top:10px; }
+button.secondary { background:transparent; }
+button.danger { color:var(--bad); }
+button:disabled { opacity:.5; }
+input { width:100%; padding:14px; border-radius:12px; border:1px solid var(--line);
+  background:var(--card); color:var(--fg); font:inherit; margin-bottom:10px; }
+details { margin-top:24px; }
+summary { color:var(--muted); cursor:pointer; padding:8px 0; }
+.muted { color:var(--muted); font-size:14px; }
+.err { color:var(--bad); }
+.ok { color:var(--ok); }
+code { background:var(--card); padding:1px 5px; border-radius:6px; }

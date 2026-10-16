@@ -43,17 +43,50 @@ transit_secs = 30        # how often to re-fetch MBTA predictions (seconds)
 weather_secs = 300       # how often to re-fetch weather from Open-Meteo (seconds)
 sports_secs = 120        # how often to re-fetch scores from ESPN (seconds)
 
-# Sports scores mode — replaces some or all of the departures panel with live/
-# recent scores for NFL, FC Bayern Munich (Bundesliga), Red Sox (MLB), and
+# Sports scores — when shown (see [schedule] and the companion app), they replace
+# some or all of the departures panel with live/recent scores for NFL, FC Bayern Munich (Bundesliga), Red Sox (MLB), and
 # men's Grand Slam tennis. The left info column (clock/weather/UV) is never
 # affected.
 [sports]
-mode = "transit"              # "transit" (never shown) | "sports" (always shown) | "auto" (hybrid)
 nfl_enabled = true             # all NFL games, leaguewide
 bayern_enabled = true          # FC Bayern Munich (Bundesliga) only
 tennis_enabled = true          # men's singles, the 4 Grand Slams only
 red_sox_enabled = true         # Boston Red Sox (MLB) only
 post_game_window_minutes = 60  # how long a finished game stays on screen
-replaceable_stop_index = 1     # which of your [[stops]] "auto" mode may replace with scores (0 or 1)
+replaceable_stop_index = 1     # which of your [[stops]] "auto" may replace with scores (0 or 1)
 hybrid_compact_max_games = 2   # <= this many relevant games -> half-panel; more -> full takeover
-prefer_scores_over_idle = true # show live/recent scores instead of the night idle animation, if any exist
+prefer_scores_over_idle = true # live/recent scores pre-empt the scheduled night idle animation
+
+# What the right-hand panel shows by default. Scenes:
+#   "transit" — departures        "sports" — scores, always (even "No games")
+#   "idle"    — moon + starfield  "auto"   — sports while any game is relevant
+#                                            (hybrid or full), else auto_fallback
+# The companion app can override any of this temporarily; it reverts to the
+# schedule below afterwards.
+[schedule]
+day_default = "auto"
+night_default = "idle"
+auto_fallback = "idle"       # what "auto" shows when no game is relevant
+night_start = 21:00:00       # night_default applies from here ...
+night_end = 06:00:00         # ... until here (independent of display.night_start)
+override_minutes = 15        # default duration of a manual override
+transit_min_minutes = 15     # "show transit" from the app never lasts less than this
+
+# Times of day when departures are the default instead (no sports pre-emption).
+# days: mon tue wed thu fri sat sun. A window may wrap past midnight.
+[[schedule.transit_windows]]
+days = ["mon", "tue", "wed", "thu", "fri"]
+start = 08:00:00
+end = 10:00:00
+
+[[schedule.transit_windows]]
+days = ["tue", "thu"]
+start = 18:00:00
+end = 20:00:00
+
+# Companion web app (PWA), served by the board itself. Needs BOARD_TOKEN in .env;
+# without it the server stays off. Local network only — never expose this port.
+[server]
+enabled = true
+host = "0.0.0.0"
+port = 8080

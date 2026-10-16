@@ -89,6 +89,34 @@ MBTA API key goes in `.env`:
 MBTA_API_KEY=your_key_here
 ```
 
+## Run at boot (systemd)
+
+```bash
+make install-service     # installs + starts transit-board.service (uses sudo)
+make logs                # follow the journal
+make uninstall-service
+```
+
+The service runs as root like `make run` and restarts on crashes. Stop any
+`make run` session first — both would claim the GPIO hardware and port 8080.
+The app's "Restart board" button works under systemd too (it re-execs in place).
+
+## Companion app
+
+The board serves a small phone-friendly web app (a PWA) on port 8080: tap
+Transit / Sports / Idle / Auto to show something for 15 min – 2 h (or hold it),
+and it falls back to the schedule in `[schedule]` afterwards. The Board section
+shows data freshness, reloads `config.toml` without restarting, or restarts the
+whole process (re-exec in place, so it works under tmux).
+
+1. Set `BOARD_TOKEN=<long random string>` in `.env` (without it the server stays off).
+2. Open `http://<pi-hostname>.local:8080` on your phone, enter the token, then
+   "Add to Home Screen".
+
+Local network only: the process runs as root for GPIO access, so never forward
+this port to the internet. In `make dev` the server binds to 127.0.0.1 with
+token `dev` unless `BOARD_TOKEN` is set.
+
 ## Stack
 
 | Concern | Choice |
@@ -97,6 +125,7 @@ MBTA_API_KEY=your_key_here
 | Deps | `uv` + `pyproject.toml` |
 | Matrix driver | hzeller/rpi-rgb-led-matrix (C lib, built by Adafruit script) |
 | Rendering | Pillow → PIL Image → matrix frame |
+| Companion server | aiohttp (same event loop as the render loop) |
 | HTTP | `httpx` (async) |
 | Transit | MBTA V3 API (free key required) |
 | Weather | Open-Meteo (free, no key) |
