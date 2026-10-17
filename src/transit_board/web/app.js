@@ -6,12 +6,12 @@ const POLL_MS = 3000;
 const SCENES = {
   transit: ["Transit", "departures"],
   sports: ["Sports", "scores"],
-  idle: ["Idle", "moon & stars"],
+  idle: ["Sky", "sun, moon & weather"],
   auto: ["Auto", "sports if live"],
 };
 const SHOWING = {
   departures: "Transit",
-  idle: "Idle",
+  idle: "Sky",
   sports_full: "Sports",
   sports_hybrid: "Sports + transit",
 };

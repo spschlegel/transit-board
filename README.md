@@ -104,7 +104,7 @@ The app's "Restart board" button works under systemd too (it re-execs in place).
 ## Companion app
 
 The board serves a small phone-friendly web app (a PWA) on port 8080: tap
-Transit / Sports / Idle / Auto to show something for 15 min – 2 h (or hold it),
+Transit / Sports / Sky / Auto to show something for 15 min – 2 h (or hold it),
 and it falls back to the schedule in `[schedule]` afterwards. The Board section
 shows data freshness, reloads `config.toml` without restarting, or restarts the
 whole process (re-exec in place, so it works under tmux).

@@ -55,12 +55,12 @@ red_sox_enabled = true         # Boston Red Sox (MLB) only
 post_game_window_minutes = 60  # how long a finished game stays on screen
 replaceable_stop_index = 1     # which of your [[stops]] "auto" may replace with scores (0 or 1)
 hybrid_compact_max_games = 2   # <= this many relevant games -> half-panel; more -> full takeover
-prefer_scores_over_idle = true # live/recent scores pre-empt the scheduled night idle animation
+prefer_scores_over_idle = true # live/recent scores pre-empt the scheduled night idle sky
 
 # What the right-hand panel shows by default. Scenes:
 #   "transit" — departures        "sports" — scores, always (even "No games")
-#   "idle"    — moon + starfield  "auto"   — sports while any game is relevant
-#                                            (hybrid or full), else auto_fallback
+#   "idle"    — live sky (sun/moon  "auto"   — sports while any game is relevant
+#               arc, stars, weather)           (hybrid or full), else auto_fallback
 # The companion app can override any of this temporarily; it reverts to the
 # schedule below afterwards.
 [schedule]

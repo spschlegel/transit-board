@@ -212,7 +212,14 @@ async def run(cfg: Config, matrix: MatrixDisplay, control: Control, dev: bool = 
             control.relevant_games = len(plan.games)
 
             if plan.kind == "idle":
-                idle_widget.draw_idle(image=image, tick=state.tick, now=now)
+                idle_widget.draw_idle(
+                    image=image,
+                    tick=state.tick,
+                    now=now,
+                    weather=state.weather,
+                    lat=cfg.lat,
+                    lon=cfg.lon,
+                )
             elif plan.kind == "departures":
                 dep_widget.draw_departures(
                     image=image,
