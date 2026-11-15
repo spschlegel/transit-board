@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import signal
 import sys
 from pathlib import Path
@@ -36,7 +37,7 @@ def main() -> None:
         "--force-sports",
         action="store_true",
         help="Always render the full-takeover sports scores view, regardless of "
-        "config sports.mode or relevant-game count (for previewing in `make dev`)",
+        "relevant-game count (for previewing in `make dev`). Wins over --force-idle.",
     )
     parser.add_argument(
         "--log-level",
@@ -74,8 +75,10 @@ def main() -> None:
     # Import all modules before matrix init — rgbmatrix drop_privileges drops
     # the process back to the invoking user after hardware init, which can
     # disrupt subsequent imports from the venv.
+    from transit_board.control import Control
     from transit_board.display.matrix import MatrixDisplay
-    from transit_board.loop import run
+    from transit_board.modes import Override
+    from transit_board.supervisor import Supervisor
 
     try:
         matrix = MatrixDisplay(
@@ -99,22 +102,31 @@ def main() -> None:
     signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
 
+    # --force-* are just a held manual override, same mechanism as the PWA's.
+    control = Control()
+    if args.force_sports:
+        control.override = Override("sports")
+    elif args.force_idle:
+        control.override = Override("idle")
+
+    supervisor = Supervisor(Path(args.config), cfg, matrix, control, dev=args.dev)
+
     try:
-        event_loop.run_until_complete(
-            run(
-                cfg,
-                matrix,
-                dev=args.dev,
-                force_idle=args.force_idle,
-                force_sports=args.force_sports,
-            )
-        )
+        event_loop.run_until_complete(supervisor.run_forever())
     except (asyncio.CancelledError, KeyboardInterrupt):
         pass
     finally:
         matrix.close()
         event_loop.close()
         log.info("Goodbye.")
+
+    if supervisor.restart_requested:
+        # Re-exec in place (same tty/tmux pane, same PID): picks up code changes and
+        # re-initialises the matrix hardware from scratch. Only reached on a clean
+        # shutdown, after matrix.close() above.
+        log.info("Restarting…")
+        logging.shutdown()
+        os.execv(sys.executable, [sys.executable, "-m", "transit_board", *sys.argv[1:]])
 
 
 if __name__ == "__main__":

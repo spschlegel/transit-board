@@ -1,4 +1,5 @@
-.PHONY: all bootstrap install-python install run dev lint format check
+.PHONY: all bootstrap install-python install run dev lint format check \
+	install-service uninstall-service logs
 
 HZELLER_DIR := rpi-rgb-led-matrix
 
@@ -50,6 +51,27 @@ install:
 # ── Run ───────────────────────────────────────────────────────────────────────
 run:
 	sudo .venv/bin/python -m transit_board
+
+# ── Service (Pi) ──────────────────────────────────────────────────────────────
+# Runs the board at boot and restarts it on crashes. Stop any `make run` (tmux)
+# first — they would fight over the GPIO hardware and port 8080.
+SERVICE := transit-board
+
+install-service:
+	@if [ ! -x .venv/bin/python ]; then echo "ERROR: .venv/ not found — run 'make install' first."; exit 1; fi
+	@echo "==> Installing /etc/systemd/system/$(SERVICE).service (repo: $(CURDIR))..."
+	sed "s|@REPO@|$(CURDIR)|g" systemd/$(SERVICE).service.in | sudo tee /etc/systemd/system/$(SERVICE).service >/dev/null
+	sudo systemctl daemon-reload
+	sudo systemctl enable --now $(SERVICE)
+	@echo "Started. Follow logs with: make logs"
+
+uninstall-service:
+	-sudo systemctl disable --now $(SERVICE)
+	sudo rm -f /etc/systemd/system/$(SERVICE).service
+	sudo systemctl daemon-reload
+
+logs:
+	journalctl -u $(SERVICE) -f
 
 # Dev mode: mock data, no matrix hardware required
 dev:

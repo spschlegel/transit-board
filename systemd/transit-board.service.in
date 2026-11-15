@@ -1,0 +1,21 @@
+# Template — `make install-service` fills in @REPO@ and installs it to
+# /etc/systemd/system/transit-board.service. Runs as root (the matrix needs GPIO),
+# exactly like `make run`. Don't run both at once.
+[Unit]
+Description=Transit board (RGB LED matrix)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO@
+ExecStart=@REPO@/.venv/bin/python -m transit_board
+Environment=PYTHONUNBUFFERED=1
+# The companion app's "Restart board" re-execs in place (same PID), so systemd
+# never sees it. This is for crashes and for starting at boot.
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

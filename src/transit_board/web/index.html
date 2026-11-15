@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b10">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Board">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="stylesheet" href="/style.css">
+  <title>Transit Board</title>
+</head>
+<body>
+  <main>
+    <h1>Transit Board</h1>
+
+    <section id="login" hidden>
+      <p>Enter the board token (<code>BOARD_TOKEN</code> from the Pi's <code>.env</code>).</p>
+      <form id="login-form">
+        <input id="token" type="password" autocomplete="current-password" placeholder="Token" required>
+        <button type="submit">Connect</button>
+      </form>
+      <p id="login-error" class="err" hidden></p>
+    </section>
+
+    <section id="panel" hidden>
+      <div id="status" class="card">
+        <div class="row"><span class="label">Showing</span><span id="showing">…</span></div>
+        <div class="row"><span class="label">Default</span><span id="default">…</span></div>
+        <div class="row" id="override-row" hidden>
+          <span class="label">Override</span><span id="override">…</span>
+        </div>
+      </div>
+
+      <h2>Show now</h2>
+      <div id="durations" class="chips" role="radiogroup" aria-label="Duration"></div>
+      <div id="scenes" class="grid"></div>
+      <button id="clear" class="wide secondary" hidden>Back to default</button>
+
+      <details id="admin">
+        <summary>Board</summary>
+        <div id="health" class="card"></div>
+        <div class="grid">
+          <button id="reload" class="secondary">Reload config</button>
+          <button id="restart" class="danger">Restart board</button>
+        </div>
+        <p id="admin-msg" class="muted" hidden></p>
+      </details>
+    </section>
+
+    <p id="conn" class="muted" hidden>Can't reach the board — retrying…</p>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
