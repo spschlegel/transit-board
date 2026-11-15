@@ -14,6 +14,9 @@ const SHOWING = {
   idle: "Sky",
   sports_full: "Sports",
   sports_hybrid: "Sports + transit",
+  news_full: "Breaking news",
+  news_transit: "Breaking news + transit",
+  news_sports: "Breaking news + sports",
 };
 const REASONS = { "transit-window": "transit window", night: "night", day: "day" };
 const DURATIONS = [[15, "15m"], [30, "30m"], [60, "1h"], [120, "2h"], [null, "Hold"]];
@@ -151,6 +154,14 @@ function render(s) {
     )}`;
   }
   $("clear").hidden = !s.override;
+  $("news").hidden = !s.news;
+  if (s.news) {
+    const at = new Date(s.news.qualified_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    $("news-headline").textContent = s.news.headline;
+    $("news-meta").textContent = `${at} · ${s.news.outlets.length} outlets · ${fmtRemaining(
+      s.news.remaining_secs,
+    )}`;
+  }
   for (const b of $("scenes").children) {
     b.classList.toggle("active", !!s.override && s.override.scene === b.dataset.scene);
   }
@@ -233,6 +244,23 @@ $("login-form").addEventListener("submit", async (ev) => {
 });
 
 $("clear").addEventListener("click", clearOverride);
+
+$("news-dismiss").addEventListener("click", async () => {
+  try {
+    render((await api("/api/news", "DELETE")).data);
+  } catch (e) {
+    if (e.message !== "unauthorized") showConn(true);
+  }
+});
+
+$("news-test").addEventListener("click", async () => {
+  try {
+    render((await api("/api/news/test", "POST")).data);
+    adminMsg("Test alert on the board for 1 minute.", "ok");
+  } catch (e) {
+    if (e.message !== "unauthorized") adminMsg("Request failed.", "err");
+  }
+});
 
 $("admin").addEventListener("toggle", async () => {
   if ($("admin").open && token) {

@@ -25,6 +25,12 @@
     </section>
 
     <section id="panel" hidden>
+      <div id="news" class="card news" hidden>
+        <div class="news-head"><span class="breaking">Breaking</span><span id="news-meta" class="muted"></span></div>
+        <p id="news-headline"></p>
+        <button id="news-dismiss" class="wide secondary">Dismiss</button>
+      </div>
+
       <div id="status" class="card">
         <div class="row"><span class="label">Showing</span><span id="showing">…</span></div>
         <div class="row"><span class="label">Default</span><span id="default">…</span></div>
@@ -45,6 +51,7 @@
           <button id="reload" class="secondary">Reload config</button>
           <button id="restart" class="danger">Restart board</button>
         </div>
+        <button id="news-test" class="wide secondary">Test breaking news (1 min)</button>
         <p id="admin-msg" class="muted" hidden></p>
       </details>
     </section>

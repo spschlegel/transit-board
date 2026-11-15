@@ -89,6 +89,14 @@ MBTA API key goes in `.env`:
 MBTA_API_KEY=your_key_here
 ```
 
+## Breaking news
+
+Rare alerts for genuinely big stories, using no news API or AI: a story has to
+be picked up by 4 of 6 major outlets (BBC, NYT, NPR, Guardian, CBS, Fox) within
+4 hours of the first article. Expect roughly 0–2 on a busy news day; tune it in `[news]`. An
+alert takes the whole panel over the sky scene, and half the panel next to
+departures or scores. Dismiss it, or show a 1-minute test alert, from the app.
+
 ## Run at boot (systemd)
 
 ```bash

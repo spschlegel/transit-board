@@ -27,12 +27,22 @@ from transit_board.display.renderer import draw_panel_chrome, new_canvas
 from transit_board.modes import default_scene
 from transit_board.providers.cache import TTLCache
 from transit_board.providers.logos import LogoCache
+from transit_board.providers.news import (
+    AlertRecord,
+    NewsAlert,
+    NewsClient,
+    NewsItem,
+    detect,
+    load_history,
+    save_history,
+)
 from transit_board.providers.sports import Game, SportsClient, mock_games, relevant_games
 from transit_board.providers.transit import Departure, MBTAClient, mock_departures
 from transit_board.providers.weather import WeatherClient, WeatherData, mock_weather
 from transit_board.widgets import clock as clock_widget
 from transit_board.widgets import departures as dep_widget
 from transit_board.widgets import idle as idle_widget
+from transit_board.widgets import news as news_widget
 from transit_board.widgets import scores as scores_widget
 from transit_board.widgets import uv as uv_widget
 from transit_board.widgets import weather as weather_widget
@@ -76,21 +86,45 @@ class AppState:
     # display window (SportsConfig.post_game_window_minutes) is measured —
     # see the comment on Game.end_time in providers/sports.py.
     sports_first_seen_post: dict[str, datetime] = field(default_factory=dict)
+    news_history: list[AlertRecord] = field(default_factory=list)  # alerts already raised
     scroll_offset: int = 0
     tick: int = 0
 
 
 @dataclass(frozen=True)
 class _PanelPlan:
-    kind: str  # "idle" | "departures" | "sports_full" | "sports_hybrid"
+    # "idle" | "departures" | "sports_full" | "sports_hybrid"
+    # | "news_full" (over the sky) | "news_transit" | "news_sports" (news in one slot)
+    kind: str
     games: list[Game]
     show_stop_divider: bool
     default: str = ""  # scheduled default scene (ignoring any override)
     reason: str = ""  # why that default: "transit-window" | "night" | "day"
+    news: Optional[NewsAlert] = None
 
 
 def _resolve_panel(cfg: Config, state: AppState, now: datetime, control: Control) -> _PanelPlan:
     """Decide what goes in the departures-panel region this frame.
+
+    A breaking-news alert is layered on top of the scene: it takes the whole
+    panel over the sky, and one slot next to departures or scores — it never
+    fully replaces transit or sports.
+    """
+    base = _resolve_scene(cfg, state, now, control)
+    alert = control.news
+    if alert is None or not alert.active:
+        return base
+    if base.kind == "idle":
+        kind, divider = "news_full", False
+    elif base.kind == "departures":
+        kind, divider = "news_transit", True
+    else:  # sports_full / sports_hybrid: news + scores, transit gives way
+        kind, divider = "news_sports", True
+    return replace(base, kind=kind, show_stop_divider=divider, news=alert)
+
+
+def _resolve_scene(cfg: Config, state: AppState, now: datetime, control: Control) -> _PanelPlan:
+    """The scene without news: override or scheduled default, then sports relevance.
 
     Scene = the manual override if one is active, else the scheduled default
     (modes.default_scene). "auto" shows sports while any game is relevant and
@@ -146,6 +180,7 @@ async def run(cfg: Config, matrix: MatrixDisplay, control: Control, dev: bool = 
     mbta = MBTAClient(cfg.mbta_api_key)
     weather_client = WeatherClient(cfg.lat, cfg.lon)
     sports_client = SportsClient()
+    news_client = NewsClient()
     logo_cache = LogoCache()
 
     # Per-stop TTL caches
@@ -154,8 +189,9 @@ async def run(cfg: Config, matrix: MatrixDisplay, control: Control, dev: bool = 
     }
     weather_cache: TTLCache[WeatherData] = TTLCache(cfg.refresh.weather_secs)
     sports_cache: TTLCache[list[Game]] = TTLCache(cfg.refresh.sports_secs)
+    news_cache: TTLCache[list[NewsItem]] = TTLCache(cfg.refresh.news_secs)
 
-    state = AppState()
+    state = AppState(news_history=load_history())
 
     # ── Walk-time initialisation ──────────────────────────────────────────────
     if dev:
@@ -196,6 +232,7 @@ async def run(cfg: Config, matrix: MatrixDisplay, control: Control, dev: bool = 
                 await _refresh_transit(cfg, mbta, transit_caches, state, control)
                 await _refresh_weather(cfg, weather_client, weather_cache, state, control)
                 await _refresh_sports(cfg, sports_client, logo_cache, sports_cache, state, control)
+                await _refresh_news(cfg, news_client, news_cache, state, control)
 
             # ── Brightness schedule (checked ~once/sec, not every frame) ────────
             if state.tick % 20 == 0:
@@ -240,32 +277,60 @@ async def run(cfg: Config, matrix: MatrixDisplay, control: Control, dev: bool = 
                     h=layout.DISPLAY_H,
                     tick=state.tick,
                 )
-            else:  # "sports_hybrid" — one slot keeps real departures, the other shows scores
+            elif plan.kind == "news_full":
+                news_widget.draw_news(
+                    image=image,
+                    alert=plan.news,
+                    x0=layout.DEPARTURES_X,
+                    y0=0,
+                    w=layout.DEPARTURES_W,
+                    h=layout.DISPLAY_H,
+                    tick=state.tick,
+                )
+            else:
+                # Two-slot layouts. The "replaceable" slot (config sports.replaceable_stop_index)
+                # gets the scores or the news; the other slot keeps its own content.
                 top_margin, panel_h, _header_gap = layout.stop_panel_layout(
                     cfg.display.departures_per_stop
                 )
-                sports_slot = max(0, min(cfg.sports.replaceable_stop_index, len(cfg.stops[:2]) - 1))
-                kept_slot = 1 - sports_slot
-                kept_stop = cfg.stops[kept_slot]
-                dep_widget.draw_single_stop(
-                    image=image,
-                    stop=kept_stop,
-                    deps=state.departures_by_stop.get(kept_stop.id, []),
-                    n_rows=cfg.display.departures_per_stop,
-                    scroll_offset=state.scroll_offset,
-                    tick=state.tick,
-                    slot_index=kept_slot,
-                )
-                scores_widget.draw_scores(
-                    image=image,
-                    games=plan.games,
-                    logo_cache=logo_cache,
-                    x0=layout.DEPARTURES_X,
-                    y0=top_margin + sports_slot * panel_h,
-                    w=layout.DEPARTURES_W,
-                    h=panel_h,
-                    tick=state.tick,
-                )
+                swap_slot = max(0, min(cfg.sports.replaceable_stop_index, len(cfg.stops[:2]) - 1))
+                kept_slot = 1 - swap_slot
+
+                def slot_y(i: int) -> int:
+                    return top_margin + i * panel_h
+
+                if plan.kind in ("sports_hybrid", "news_transit") and cfg.stops:
+                    kept_stop = cfg.stops[min(kept_slot, len(cfg.stops) - 1)]
+                    dep_widget.draw_single_stop(
+                        image=image,
+                        stop=kept_stop,
+                        deps=state.departures_by_stop.get(kept_stop.id, []),
+                        n_rows=cfg.display.departures_per_stop,
+                        scroll_offset=state.scroll_offset,
+                        tick=state.tick,
+                        slot_index=kept_slot,
+                    )
+                if plan.kind in ("sports_hybrid", "news_sports"):
+                    scores_widget.draw_scores(
+                        image=image,
+                        games=plan.games,
+                        logo_cache=logo_cache,
+                        x0=layout.DEPARTURES_X,
+                        y0=slot_y(swap_slot if plan.kind == "sports_hybrid" else kept_slot),
+                        w=layout.DEPARTURES_W,
+                        h=panel_h,
+                        tick=state.tick,
+                    )
+                if plan.news is not None:
+                    news_widget.draw_news(
+                        image=image,
+                        alert=plan.news,
+                        x0=layout.DEPARTURES_X,
+                        y0=slot_y(swap_slot),
+                        w=layout.DEPARTURES_W,
+                        h=panel_h,
+                        tick=state.tick,
+                    )
 
             clock_widget.draw_clock(image=image)
             show_forecast = _forecast_preview_active(now)
@@ -304,6 +369,7 @@ async def run(cfg: Config, matrix: MatrixDisplay, control: Control, dev: bool = 
         await mbta.aclose()
         await weather_client.aclose()
         await sports_client.aclose()
+        await news_client.aclose()
         await logo_cache.aclose()
 
 
@@ -422,3 +488,35 @@ async def _refresh_sports(
         await logo_cache.ensure(urls)
 
     log.debug("Sports: %d relevant-or-not game(s) fetched", len(resolved))
+
+
+async def _refresh_news(
+    cfg: Config,
+    client: NewsClient,
+    cache: TTLCache[list[NewsItem]],
+    state: AppState,
+    control: Control,
+) -> None:
+    if not cfg.news.enabled or not cache.expired:
+        return
+    items, errors = await client.fetch_all(cfg.news.outlets)
+    cache.set(items)
+    control.refreshed("news")
+    if errors:  # partial failure: the other outlets still count, report which ones failed
+        log.warning("News feeds failed: %s", errors)
+        control.last_error["news"] = "; ".join(f"{o}: {e}" for o, e in errors.items())
+    if not items:
+        return
+
+    now = datetime.now(timezone.utc)
+    # Grouping is a few thousand set intersections — off the event loop so a frame never waits.
+    alert = await asyncio.to_thread(detect, items, cfg.news, list(state.news_history), now)
+    if alert is None:
+        return
+    log.info("Breaking news (%s): %s", ", ".join(alert.outlets), alert.headline)
+    control.news = alert
+    state.news_history.append(AlertRecord(now, alert.headline, alert.tokens))
+    try:
+        save_history(state.news_history)
+    except OSError as exc:
+        log.warning("Could not save news history: %s", exc)

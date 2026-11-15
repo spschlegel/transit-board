@@ -40,6 +40,11 @@ def main() -> None:
         "relevant-game count (for previewing in `make dev`). Wins over --force-idle.",
     )
     parser.add_argument(
+        "--force-news",
+        action="store_true",
+        help="Show a sample breaking-news alert (held) on top of whatever scene is showing",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -78,6 +83,7 @@ def main() -> None:
     from transit_board.control import Control
     from transit_board.display.matrix import MatrixDisplay
     from transit_board.modes import Override
+    from transit_board.providers.news import sample_alert
     from transit_board.supervisor import Supervisor
 
     try:
@@ -108,6 +114,8 @@ def main() -> None:
         control.override = Override("sports")
     elif args.force_idle:
         control.override = Override("idle")
+    if args.force_news:
+        control.news = sample_alert(None)
 
     supervisor = Supervisor(Path(args.config), cfg, matrix, control, dev=args.dev)
 

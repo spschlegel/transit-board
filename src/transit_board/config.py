@@ -48,6 +48,7 @@ class RefreshConfig:
     transit_secs: int = 30
     weather_secs: int = 300
     sports_secs: int = 120
+    news_secs: int = 300
 
 
 @dataclass
@@ -60,6 +61,18 @@ class SportsConfig:
     replaceable_stop_index: int = 1  # which of stops[:2] "auto" hybrid mode may replace (0 or 1)
     hybrid_compact_max_games: int = 2  # <= this many games -> half-panel; more -> full takeover
     prefer_scores_over_idle: bool = True  # live games pre-empt the night idle default
+
+
+NEWS_OUTLETS = ("bbc", "nyt", "npr", "guardian", "cbs", "fox")
+
+
+@dataclass
+class NewsConfig:
+    enabled: bool = True
+    outlets: list[str] = field(default_factory=lambda: list(NEWS_OUTLETS))
+    min_outlets: int = 4  # a story must be carried by at least this many outlets ...
+    uptake_hours: float = 4.0  # ... all within this long of the first article
+    show_minutes: int = 45
 
 
 # What the departures-panel region shows. "auto" = sports (hybrid or full) while any game is
@@ -117,6 +130,7 @@ class Config:
     refresh: RefreshConfig = field(default_factory=RefreshConfig)
     sports: SportsConfig = field(default_factory=SportsConfig)
     schedule: ScheduleConfig = field(default_factory=ScheduleConfig)
+    news: NewsConfig = field(default_factory=NewsConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
     walk_speed_kmh: float = 5.0  # walking speed for "when to leave" auto-calculation
 
@@ -179,6 +193,7 @@ def load(path: Path = _DEFAULT_CONFIG) -> Config:
         transit_secs=int(ref_raw.get("transit_secs", 30)),
         weather_secs=int(ref_raw.get("weather_secs", 300)),
         sports_secs=int(ref_raw.get("sports_secs", 120)),
+        news_secs=int(ref_raw.get("news_secs", 300)),
     )
 
     sports_raw = raw.get("sports", {})
@@ -211,6 +226,7 @@ def load(path: Path = _DEFAULT_CONFIG) -> Config:
         refresh=ref,
         sports=sports,
         schedule=_load_schedule(raw.get("schedule", {})),
+        news=_load_news(raw.get("news", {})),
         server=_load_server(raw.get("server", {})),
         walk_speed_kmh=float(loc.get("walk_speed_kmh", 5.0)),
     )
@@ -254,6 +270,34 @@ def _load_schedule(raw: dict) -> ScheduleConfig:
     )
 
 
+def _load_news(raw: dict) -> NewsConfig:
+    d = NewsConfig()
+    outlets = [str(o).lower() for o in raw.get("outlets", d.outlets)]
+    unknown = [o for o in outlets if o not in NEWS_OUTLETS]
+    if unknown:
+        warnings.warn(
+            f"news.outlets: unknown {unknown} (known: {', '.join(NEWS_OUTLETS)}) — ignored",
+            stacklevel=2,
+        )
+        outlets = [o for o in outlets if o in NEWS_OUTLETS]
+    min_outlets = int(raw.get("min_outlets", d.min_outlets))
+    if not 2 <= min_outlets <= len(outlets):
+        clamped = max(2, min(min_outlets, len(outlets)))
+        warnings.warn(
+            f"news.min_outlets={min_outlets} needs 2..{len(outlets)} (outlets enabled) "
+            f"— using {clamped}",
+            stacklevel=2,
+        )
+        min_outlets = clamped
+    return NewsConfig(
+        enabled=bool(raw.get("enabled", d.enabled)) and len(outlets) >= 2,
+        outlets=outlets,
+        min_outlets=min_outlets,
+        uptake_hours=float(raw.get("uptake_hours", d.uptake_hours)),
+        show_minutes=int(raw.get("show_minutes", d.show_minutes)),
+    )
+
+
 def _load_server(raw: dict) -> ServerConfig:
     d = ServerConfig()
     return ServerConfig(
@@ -278,6 +322,7 @@ def dev_default() -> Config:
         refresh=RefreshConfig(transit_secs=30, weather_secs=300, sports_secs=120),
         sports=SportsConfig(),
         schedule=ScheduleConfig(),
+        news=NewsConfig(),
         server=ServerConfig(host="127.0.0.1", token=os.environ.get("BOARD_TOKEN", "dev")),
         walk_speed_kmh=5.0,
     )

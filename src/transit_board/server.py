@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 from aiohttp import web
 
 from transit_board.modes import SCENES, Override
+from transit_board.providers.news import sample_alert
 
 if TYPE_CHECKING:
     from transit_board.supervisor import Supervisor
@@ -30,6 +31,7 @@ log = logging.getLogger(__name__)
 WEB_DIR = Path(__file__).resolve().parent / "web"
 _MAX_OVERRIDE_MINUTES = 24 * 60
 _AUTH_FAIL_DELAY = 0.5  # slows down token guessing on the LAN
+_TEST_ALERT_MINUTES = 1
 
 
 def _state_payload(sup: "Supervisor") -> dict[str, Any]:
@@ -44,9 +46,22 @@ def _state_payload(sup: "Supervisor") -> dict[str, Any]:
             None if ov is None else {"scene": ov.scene, "remaining_secs": ov.remaining_secs}
         ),
         "relevant_games": control.relevant_games,
+        "news": _news_payload(sup),
         "scenes": list(SCENES),
         "override_minutes": sched.override_minutes,
         "transit_min_minutes": sched.transit_min_minutes,
+    }
+
+
+def _news_payload(sup: "Supervisor") -> dict[str, Any] | None:
+    a = sup.control.news
+    if a is None or not a.active:
+        return None
+    return {
+        "headline": a.headline,
+        "outlets": a.outlets,
+        "qualified_at": a.qualified_at.isoformat(),
+        "remaining_secs": a.remaining_secs,
     }
 
 
@@ -62,7 +77,7 @@ def _health_payload(sup: "Supervisor") -> dict[str, Any]:
                 "age_secs": int(now - c.last_refresh[name]) if name in c.last_refresh else None,
                 "error": c.last_error.get(name),
             }
-            for name in ("transit", "weather", "sports")
+            for name in ("transit", "weather", "sports", "news")
         },
     }
 
@@ -120,6 +135,18 @@ def make_app(sup: "Supervisor", token: str) -> web.Application:
         log.info("Override cleared")
         return web.json_response(_state_payload(sup))
 
+    async def dismiss_news(_: web.Request) -> web.Response:
+        if sup.control.news is not None:
+            sup.control.news.dismissed = True
+            log.info("Breaking news dismissed")
+        return web.json_response(_state_payload(sup))
+
+    async def test_news(_: web.Request) -> web.Response:
+        # Preview the layout on the real panel. Not recorded in the alert history.
+        sup.control.news = sample_alert(_TEST_ALERT_MINUTES)
+        log.info("Test breaking-news alert for %d min", _TEST_ALERT_MINUTES)
+        return web.json_response(_state_payload(sup))
+
     async def reload(_: web.Request) -> web.Response:
         result = sup.reload()
         return web.json_response(result, status=200 if result["ok"] else 400)
@@ -137,6 +164,8 @@ def make_app(sup: "Supervisor", token: str) -> web.Application:
     app.router.add_get("/api/health", get_health)
     app.router.add_post("/api/override", set_override)
     app.router.add_delete("/api/override", clear_override)
+    app.router.add_delete("/api/news", dismiss_news)
+    app.router.add_post("/api/news/test", test_news)
     app.router.add_post("/api/reload", reload)
     app.router.add_post("/api/restart", restart)
     app.router.add_get("/", index)

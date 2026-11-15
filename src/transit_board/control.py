@@ -7,12 +7,16 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from transit_board.modes import Override
+from transit_board.providers.news import NewsAlert
 
 
 @dataclass
 class Control:
     # Manual override from the PWA (or a --force-* flag). Survives a soft reload.
     override: Optional[Override] = None
+    # Current breaking-news alert (set by the render loop's news refresh, dismissed from the
+    # PWA). Lives here, not in AppState, so it survives a soft reload.
+    news: Optional[NewsAlert] = None
 
     # Written by the render loop every frame, read by the server for /api/state.
     default_scene: str = ""

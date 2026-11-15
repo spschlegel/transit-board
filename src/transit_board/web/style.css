@@ -33,3 +33,8 @@ summary { color:var(--muted); cursor:pointer; padding:8px 0; }
 .err { color:var(--bad); }
 .ok { color:var(--ok); }
 code { background:var(--card); padding:1px 5px; border-radius:6px; }
+.news { border-color: var(--bad); padding: 10px 14px; }
+.news-head { display:flex; justify-content:space-between; align-items:baseline; }
+.breaking { color: var(--bad); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; font-size: 13px; }
+#news-headline { margin: 6px 0 2px; font-size: 17px; }
+.news button { margin-top: 6px; padding: 10px; }

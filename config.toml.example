@@ -42,6 +42,7 @@ night_start = 21:00:00     # local time brightness switches to brightness_night
 transit_secs = 30        # how often to re-fetch MBTA predictions (seconds)
 weather_secs = 300       # how often to re-fetch weather from Open-Meteo (seconds)
 sports_secs = 120        # how often to re-fetch scores from ESPN (seconds)
+news_secs = 300          # how often to poll the news outlets' RSS feeds (seconds)
 
 # Sports scores — when shown (see [schedule] and the companion app), they replace
 # some or all of the departures panel with live/recent scores for NFL, FC Bayern Munich (Bundesliga), Red Sox (MLB), and
@@ -83,6 +84,21 @@ end = 10:00:00
 days = ["tue", "thu"]
 start = 18:00:00
 end = 20:00:00
+
+# Breaking news — no API key, no AI: an alert fires only when a *new* story is
+# picked up by at least min_outlets of these outlets within uptake_hours of the
+# first article. Fast uptake is what separates breaking news from a story that
+# spreads through the day. Calibrated on live feeds: a nationwide FAA ground stop
+# and SpaceX's first Starship catch qualify; a ship collision that took 4.5 h to
+# reach a 4th outlet doesn't. Expect roughly 0-2 alerts on a busy news day.
+# An alert takes the whole panel over the sky scene, and one stop slot next to
+# departures or scores (never fully replacing them). Dismiss it from the app.
+[news]
+enabled = true
+outlets = ["bbc", "nyt", "npr", "guardian", "cbs", "fox"]
+min_outlets = 4
+uptake_hours = 4.0
+show_minutes = 45
 
 # Companion web app (PWA), served by the board itself. Needs BOARD_TOKEN in .env;
 # without it the server stays off. Local network only — never expose this port.
